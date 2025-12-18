@@ -4,9 +4,9 @@ import site.addzero.util.db.DatabaseType
 import site.addzero.util.ddlgenerator.api.DdlGeneratorFactory
 import site.addzero.util.lsi.clazz.LsiClass
 import site.addzero.util.lsi.clazz.guessTableName
-import site.addzero.util.lsi.database.getDatabaseForeignKeys
-import site.addzero.util.lsi.database.getIndexDefinitions
 import site.addzero.util.lsi.database.scanManyToManyTables
+import site.addzero.util.lsi_impl.impl.database.clazz.getDatabaseForeignKeys
+import site.addzero.util.lsi_impl.impl.database.clazz.getIndexDefinitions
 
 /**
  * 生成完整的Schema DDL（包括表、索引、中间表、外键）

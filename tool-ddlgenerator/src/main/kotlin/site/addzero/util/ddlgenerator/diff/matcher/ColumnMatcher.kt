@@ -4,9 +4,9 @@ import site.addzero.util.ddlgenerator.diff.model.ColumnModification
 import site.addzero.util.ddlgenerator.diff.model.DiffConfig
 
 import site.addzero.entity.JdbcColumnMetadata
-import site.addzero.util.lsi.database.DatabaseColumnType
-import site.addzero.util.lsi.database.getDatabaseColumnType
-import site.addzero.util.lsi.database.guessLength
+import site.addzero.util.lsi.database.model.DatabaseColumnType
+import site.addzero.util.lsi_impl.impl.database.field.getDatabaseColumnType
+import site.addzero.util.lsi_impl.impl.database.field.guessLength
 import site.addzero.util.lsi.field.LsiField
 
 /**

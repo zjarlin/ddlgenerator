@@ -2,8 +2,8 @@ package site.addzero.util.ddlgenerator
 
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
-import site.addzero.util.lsi.database.getIndexDefinitions
-import site.addzero.util.lsi.database.IndexType
+import site.addzero.util.lsi_impl.impl.database.field.getIndexDefinitions
+import site.addzero.util.lsi.database.model.IndexType
 
 /**
  * Key 注解索引生成单元测试

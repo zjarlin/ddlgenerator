@@ -2,7 +2,10 @@ package site.addzero.util.ddlgenerator.strategy
 
 import site.addzero.util.ddlgenerator.api.AbstractColumnTypeMapper
 import site.addzero.util.lsi.field.LsiField
-import site.addzero.util.lsi.database.*
+import site.addzero.util.lsi_impl.impl.database.field.isText
+import site.addzero.util.lsi_impl.impl.database.field.length
+import site.addzero.util.lsi_impl.impl.database.field.precision
+import site.addzero.util.lsi_impl.impl.database.field.scale
 
 /**
  * PostgreSQL列类型映射器

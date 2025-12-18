@@ -5,7 +5,16 @@ import site.addzero.util.ddlgenerator.api.DdlGenerationStrategy
 import site.addzero.util.lsi.clazz.LsiClass
 import site.addzero.util.lsi.clazz.guessTableName
 import site.addzero.util.lsi.database.*
+import site.addzero.util.lsi.database.model.DatabaseColumnType
+import site.addzero.util.lsi.database.model.ForeignKeyInfo
 import site.addzero.util.lsi.field.LsiField
+import site.addzero.util.lsi_impl.impl.database.clazz.databaseFields
+import site.addzero.util.lsi_impl.impl.database.clazz.getDatabaseForeignKeys
+import site.addzero.util.lsi_impl.impl.database.field.getDatabaseColumnType
+import site.addzero.util.lsi_impl.impl.database.field.isAutoIncrement
+import site.addzero.util.lsi_impl.impl.database.field.isPrimaryKey
+import site.addzero.util.lsi_impl.impl.database.field.isText
+import site.addzero.util.lsi_impl.impl.database.field.length
 
 /**
  * MySQL方言的DDL生成策略

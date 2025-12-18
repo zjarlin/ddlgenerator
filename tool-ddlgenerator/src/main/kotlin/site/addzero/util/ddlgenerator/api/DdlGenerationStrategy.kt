@@ -2,11 +2,13 @@ package site.addzero.util.ddlgenerator.api
 
 import site.addzero.util.db.DatabaseType
 import site.addzero.util.lsi.clazz.LsiClass
+import site.addzero.util.lsi.database.model.ManyToManyTable
 import site.addzero.util.lsi.field.LsiField
-import site.addzero.util.lsi.database.DatabaseColumnType
-import site.addzero.util.lsi.database.ForeignKeyInfo
-import site.addzero.util.lsi.database.databaseFields
-import site.addzero.util.lsi.database.getDatabaseForeignKeys
+import site.addzero.util.lsi.database.model.DatabaseColumnType
+import site.addzero.util.lsi.database.model.ForeignKeyInfo
+import site.addzero.util.lsi.database.model.IndexDefinition
+import site.addzero.util.lsi_impl.impl.database.clazz.databaseFields
+import site.addzero.util.lsi_impl.impl.database.clazz.getDatabaseForeignKeys
 
 /**
  * DDL生成策略接口 - SPI服务接口
@@ -75,7 +77,7 @@ interface DdlGenerationStrategy {
     /**
      * 生成创建索引的DDL语句
      */
-    fun generateCreateIndex(tableName: String, index: site.addzero.util.lsi.database.IndexDefinition): String {
+    fun generateCreateIndex(tableName: String, index: IndexDefinition): String {
         val indexType = if (index.unique) "UNIQUE INDEX" else "INDEX"
         val columns = index.columns.joinToString(", ") { "`$it`" }
         return "CREATE $indexType `${index.name}` ON `$tableName` ($columns);"
@@ -85,7 +87,7 @@ interface DdlGenerationStrategy {
      * 生成多对多中间表的DDL语句（不包含外键）
      * 外键应该在所有表创建完成后单独添加
      */
-    fun generateManyToManyTable(table: site.addzero.util.lsi.database.ManyToManyTable): String {
+    fun generateManyToManyTable(table: ManyToManyTable): String {
         return """
             |CREATE TABLE `${table.tableName}` (
             |  `${table.leftColumnName}` BIGINT NOT NULL,
@@ -98,7 +100,7 @@ interface DdlGenerationStrategy {
     /**
      * 为多对多中间表生成外键约束
      */
-    fun generateManyToManyTableForeignKeys(table: site.addzero.util.lsi.database.ManyToManyTable): List<String> {
+    fun generateManyToManyTableForeignKeys(table: ManyToManyTable): List<String> {
         return listOf(
             "ALTER TABLE `${table.tableName}` ADD CONSTRAINT `fk_${table.tableName}_${table.leftColumnName}` FOREIGN KEY (`${table.leftColumnName}`) REFERENCES `${table.leftTableName}` (`id`);",
             "ALTER TABLE `${table.tableName}` ADD CONSTRAINT `fk_${table.tableName}_${table.rightColumnName}` FOREIGN KEY (`${table.rightColumnName}`) REFERENCES `${table.rightTableName}` (`id`);"
