@@ -8,7 +8,7 @@ import site.addzero.util.lsi.database.*
 import site.addzero.util.lsi.database.model.DatabaseColumnType
 import site.addzero.util.lsi.database.model.ForeignKeyInfo
 import site.addzero.util.lsi.field.LsiField
-import site.addzero.util.lsi_impl.impl.database.clazz.databaseFields
+import site.addzero.util.lsi_impl.impl.database.clazz.getAllDbFields
 import site.addzero.util.lsi_impl.impl.database.clazz.getDatabaseForeignKeys
 import site.addzero.util.lsi_impl.impl.database.field.getDatabaseColumnType
 import site.addzero.util.lsi_impl.impl.database.field.isAutoIncrement
@@ -31,7 +31,7 @@ class MySqlDdlStrategy : DdlGenerationStrategy {
 
     override fun generateCreateTable(lsiClass: LsiClass): String {
         val tableName = lsiClass.guessTableName
-        val columns = lsiClass.databaseFields
+        val columns = lsiClass.getAllDbFields()
 
         val columnsSql = columns.joinToString(",\n  ") { field ->
             buildColumnDefinition(field)
@@ -81,7 +81,7 @@ class MySqlDdlStrategy : DdlGenerationStrategy {
         }
 
         // 列注释
-        lsiClass.databaseFields.filter { it.comment != null }.forEach { field ->
+        lsiClass.getAllDbFields().filter { it.comment != null }.forEach { field ->
             val columnName = field.columnName ?: field.name ?: return@forEach
             val columnType = field.getDatabaseColumnType()
             statements.add("ALTER TABLE `$tableName` MODIFY `$columnName` ${getColumnTypeName(columnType)} COMMENT '${field.comment}';")
@@ -97,7 +97,7 @@ class MySqlDdlStrategy : DdlGenerationStrategy {
             val foreignKeyStatements = lsiClass.getDatabaseForeignKeys().map { fk ->
                 generateAddForeignKey(lsiClass.guessTableName, fk)
             }
-            val commentStatements = if (lsiClass.comment != null || lsiClass.databaseFields.any { it.comment != null }) {
+            val commentStatements = if (lsiClass.comment != null || lsiClass.getAllDbFields().any { it.comment != null }) {
                 listOf(generateAddComment(lsiClass))
             } else {
                 emptyList()

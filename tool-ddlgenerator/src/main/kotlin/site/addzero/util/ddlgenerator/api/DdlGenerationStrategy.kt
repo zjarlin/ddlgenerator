@@ -7,7 +7,7 @@ import site.addzero.util.lsi.field.LsiField
 import site.addzero.util.lsi.database.model.DatabaseColumnType
 import site.addzero.util.lsi.database.model.ForeignKeyInfo
 import site.addzero.util.lsi.database.model.IndexDefinition
-import site.addzero.util.lsi_impl.impl.database.clazz.databaseFields
+import site.addzero.util.lsi_impl.impl.database.clazz.getAllDbFields
 import site.addzero.util.lsi_impl.impl.database.clazz.getDatabaseForeignKeys
 
 /**
@@ -128,7 +128,7 @@ interface DdlGenerationStrategy {
             val foreignKeyStatements = lsiClass.getDatabaseForeignKeys().map { fk ->
                 generateAddForeignKey(lsiClass.name ?: "", fk)
             }
-            val commentStatements = if (lsiClass.comment != null || lsiClass.databaseFields.any { it.comment != null }) {
+            val commentStatements = if (lsiClass.comment != null || lsiClass.getAllDbFields().any { it.comment != null }) {
                 listOf(generateAddComment(lsiClass))
             } else {
                 emptyList()

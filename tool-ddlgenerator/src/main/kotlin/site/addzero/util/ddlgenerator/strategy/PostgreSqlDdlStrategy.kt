@@ -8,7 +8,7 @@ import site.addzero.util.lsi.database.*
 import site.addzero.util.lsi.database.model.DatabaseColumnType
 import site.addzero.util.lsi.database.model.ForeignKeyInfo
 import site.addzero.util.lsi.field.LsiField
-import site.addzero.util.lsi_impl.impl.database.clazz.databaseFields
+import site.addzero.util.lsi_impl.impl.database.clazz.getAllDbFields
 import site.addzero.util.lsi_impl.impl.database.clazz.getDatabaseForeignKeys
 import site.addzero.util.lsi_impl.impl.database.field.getDatabaseColumnType
 import site.addzero.util.lsi_impl.impl.database.field.isAutoIncrement
@@ -32,7 +32,7 @@ class PostgreSqlDdlStrategy : DdlGenerationStrategy {
 
     override fun generateCreateTable(lsiClass: LsiClass): String {
         val tableName = lsiClass.guessTableName
-        val columns = lsiClass.databaseFields
+        val columns = lsiClass.getAllDbFields()
 
         val columnsSql = columns.joinToString(",\n  ") { field ->
             buildColumnDefinition(field)
@@ -93,7 +93,7 @@ class PostgreSqlDdlStrategy : DdlGenerationStrategy {
         }
 
         // 列注释
-        lsiClass.databaseFields.filter { it.comment != null }.forEach { field ->
+        lsiClass.getAllDbFields().filter { it.comment != null }.forEach { field ->
             val columnName = field.columnName ?: field.name ?: return@forEach
             statements.add("COMMENT ON COLUMN \"$tableName\".\"$columnName\" IS '${field.comment}';")
         }
@@ -107,7 +107,7 @@ class PostgreSqlDdlStrategy : DdlGenerationStrategy {
         // 1. 创建所有需要的序列
         val sequences = mutableSetOf<String>()
         lsiClasses.forEach { lsiClass ->
-            lsiClass.databaseFields.forEach { field ->
+            lsiClass.getAllDbFields().forEach { field ->
                 if (field.isSequence) {
                     val seqName = field.sequenceName ?: "${field.columnName ?: field.name}_seq"
                     sequences.add(seqName)
@@ -127,7 +127,7 @@ class PostgreSqlDdlStrategy : DdlGenerationStrategy {
             val foreignKeyStatements = lsiClass.getDatabaseForeignKeys().map { fk ->
                 generateAddForeignKey(lsiClass.guessTableName, fk)
             }
-            val commentStatements = if (lsiClass.comment != null || lsiClass.databaseFields.any { it.comment != null }) {
+            val commentStatements = if (lsiClass.comment != null || lsiClass.getAllDbFields().any { it.comment != null }) {
                 listOf(generateAddComment(lsiClass))
             } else {
                 emptyList()
