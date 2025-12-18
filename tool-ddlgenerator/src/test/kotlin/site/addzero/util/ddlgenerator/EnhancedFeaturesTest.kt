@@ -269,6 +269,9 @@ class EnhancedFeaturesTest {
             )
 
             override fun getAttribute(name: String): Any? = attributes[name]
+            override fun hasAttribute(name: String): Boolean {
+                TODO("Not yet implemented")
+            }
         }
     }
 }
