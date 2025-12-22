@@ -2,38 +2,20 @@ package site.addzero.util.ddlgenerator.api
 
 import site.addzero.util.db.DatabaseType
 import site.addzero.util.lsi.clazz.LsiClass
-import site.addzero.util.lsi.database.model.ManyToManyTable
-import site.addzero.util.lsi.field.LsiField
-import site.addzero.util.lsi.database.model.DatabaseColumnType
 import site.addzero.util.lsi.database.model.ForeignKeyInfo
 import site.addzero.util.lsi.database.model.IndexDefinition
+import site.addzero.util.lsi.database.model.ManyToManyTable
+import site.addzero.util.lsi.field.LsiField
 import site.addzero.util.lsi_impl.impl.database.clazz.getAllDbFields
 import site.addzero.util.lsi_impl.impl.database.clazz.getDatabaseForeignKeys
-
-/**
- * DDL生成策略接口 - SPI服务接口
- *
- * 通过 ServiceLoader 机制自动发现和加载不同数据库的实现
- *
- * 注意：此接口通常不需要直接使用，推荐使用 LsiClass 和 LsiField 的扩展函数
- * 
- * 设计原则：
- * 1. 每个策略应实现自己的ColumnTypeMapper来处理类型映射
- * 2. 支持数据库特有类型的扩展
- * 3. getColumnTypeName方法保留用于向后兼容
- */
 interface DdlGenerationStrategy {
-    
+
     /**
-     * 获取此策略的列类型映射器
-     * 
-     * 推荐做法：每个策略实现自己的ColumnTypeMapper
-     * 例如：MySqlColumnTypeMapper, PostgreSqlColumnTypeMapper
-     * 
-     * @return 列类型映射器，如果为null则使用旧的getColumnTypeName方法
+     * 默认映射（当没有匹配的类型时）
      */
-    fun getColumnTypeMapper(): ColumnTypeMapper? = null
-    
+    fun getDefaultMapping(field: LsiField): String = "VARCHAR(255)"
+
+
     /**
      * 检查此策略是否支持给定的数据库方言
      */
@@ -107,16 +89,6 @@ interface DdlGenerationStrategy {
         )
     }
 
-    /**
-     * 获取特定列类型的数据库表示形式
-     * 
-     * @deprecated 使用 getColumnTypeMapper() 代替，以获得更好的数据库特有类型支持
-     */
-    @Deprecated(
-        message = "Use getColumnTypeMapper() instead for better database-specific type support",
-        replaceWith = ReplaceWith("getColumnTypeMapper()?.mapFieldToColumnType(field)")
-    )
-    fun getColumnTypeName(columnType: DatabaseColumnType, precision: Int? = null, scale: Int? = null): String
 
     /**
      * 生成基于多个 LSI 类的完整DDL语句（考虑表之间的依赖关系）

@@ -1,7 +1,7 @@
 package site.addzero.util.ddlgenerator.diff.matcher
 
+import site.addzero.util.ddlgenerator.config.Settings
 import site.addzero.util.ddlgenerator.diff.model.ColumnModification
-import site.addzero.util.ddlgenerator.diff.model.DiffConfig
 
 import site.addzero.entity.JdbcColumnMetadata
 import site.addzero.util.lsi.database.model.DatabaseColumnType
@@ -21,19 +21,19 @@ object ColumnMatcher {
     fun isColumnMatched(
         field: LsiField,
         dbColumn: JdbcColumnMetadata,
-        config: DiffConfig = DiffConfig()
+        config: Settings = Settings.DEFAULT
     ): Boolean {
         val changes = detectChanges(field, dbColumn, config)
         return changes.isEmpty()
     }
-    
+
     /**
      * 检测列的变化
      */
     fun detectChanges(
         field: LsiField,
         dbColumn: JdbcColumnMetadata,
-        config: DiffConfig = DiffConfig()
+        config: Settings = Settings.DEFAULT
     ): Set<ColumnModification.ColumnChangeType> {
         val changes = mutableSetOf<ColumnModification.ColumnChangeType>()
         

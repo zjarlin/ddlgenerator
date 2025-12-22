@@ -1,34 +1,59 @@
 package site.addzero.util.ddlgenerator.strategy
 
+import site.addzero.ioc.annotation.Component
 import site.addzero.util.db.DatabaseType
 import site.addzero.util.ddlgenerator.api.DdlGenerationStrategy
 import site.addzero.util.lsi.clazz.LsiClass
 import site.addzero.util.lsi.clazz.guessTableName
-import site.addzero.util.lsi.database.*
 import site.addzero.util.lsi.database.model.DatabaseColumnType
 import site.addzero.util.lsi.database.model.ForeignKeyInfo
 import site.addzero.util.lsi.field.LsiField
 import site.addzero.util.lsi_impl.impl.database.clazz.getAllDbFields
 import site.addzero.util.lsi_impl.impl.database.clazz.getDatabaseForeignKeys
-import site.addzero.util.lsi_impl.impl.database.field.getDatabaseColumnType
-import site.addzero.util.lsi_impl.impl.database.field.isAutoIncrement
-import site.addzero.util.lsi_impl.impl.database.field.isPrimaryKey
-import site.addzero.util.lsi_impl.impl.database.field.isText
-import site.addzero.util.lsi_impl.impl.database.field.length
+import site.addzero.util.lsi_impl.impl.database.field.*
 
 /**
  * MySQL方言的DDL生成策略
  */
+@Component
 class MySqlDdlStrategy : DdlGenerationStrategy {
-    
-    private val columnTypeMapper = MySqlColumnTypeMapper()
+    override val simpleTypeMappings: Map<String, (LsiField) -> String> = mapOf(
+        // Kotlin类型
+        "Int" to { "INT" },
+        "Long" to { "BIGINT" },
+        "Short" to { "SMALLINT" },
+        "Byte" to { "TINYINT" },
+        "Float" to { "FLOAT" },
+        "Double" to { "DOUBLE" },
+        "String" to { field -> mapStringType(field) },
+        "Char" to { "CHAR(1)" },
+        "Boolean" to { "TINYINT(1)" },
 
-    override fun getColumnTypeMapper() = columnTypeMapper
+        // Kotlin日期时间（kotlinx-datetime）
+        "LocalDate" to { "DATE" },
+        "LocalTime" to { "TIME" },
+        "LocalDateTime" to { "DATETIME" },
+        "Instant" to { "TIMESTAMP" }
+    )
+
+    override fun getDatabaseSpecificType(field: LsiField): String? {
+        // 检查@Column(columnDefinition)
+        field.annotations.firstOrNull {
+            it.qualifiedName?.endsWith("Column") == true
+        }?.let { columnAnno ->
+            columnAnno.getAttribute("columnDefinition")?.toString()?.let { def ->
+                if (def.isNotBlank() && def != "null") {
+                    return def
+                }
+            }
+        }
+
+        return null
+    }
 
     override fun supports(dialect: DatabaseType): Boolean {
         return dialect == DatabaseType.MYSQL
     }
-
     override fun generateCreateTable(lsiClass: LsiClass): String {
         val tableName = lsiClass.guessTableName
         val columns = lsiClass.getAllDbFields()
@@ -36,7 +61,6 @@ class MySqlDdlStrategy : DdlGenerationStrategy {
         val columnsSql = columns.joinToString(",\n  ") { field ->
             buildColumnDefinition(field)
         }
-
         // 查找自增主键列以设置AUTO_INCREMENT选项
         val autoIncrementOption = columns.find { it.isAutoIncrement }?.let {
             " AUTO_INCREMENT=1"
@@ -97,11 +121,12 @@ class MySqlDdlStrategy : DdlGenerationStrategy {
             val foreignKeyStatements = lsiClass.getDatabaseForeignKeys().map { fk ->
                 generateAddForeignKey(lsiClass.guessTableName, fk)
             }
-            val commentStatements = if (lsiClass.comment != null || lsiClass.getAllDbFields().any { it.comment != null }) {
-                listOf(generateAddComment(lsiClass))
-            } else {
-                emptyList()
-            }
+            val commentStatements =
+                if (lsiClass.comment != null || lsiClass.getAllDbFields().any { it.comment != null }) {
+                    listOf(generateAddComment(lsiClass))
+                } else {
+                    emptyList()
+                }
             foreignKeyStatements + commentStatements
         }
 
@@ -123,6 +148,7 @@ class MySqlDdlStrategy : DdlGenerationStrategy {
                     "DECIMAL"
                 }
             }
+
             DatabaseColumnType.FLOAT -> "FLOAT"
             DatabaseColumnType.DOUBLE -> "DOUBLE"
             DatabaseColumnType.VARCHAR -> {
@@ -132,6 +158,7 @@ class MySqlDdlStrategy : DdlGenerationStrategy {
                     "VARCHAR(255)"
                 }
             }
+
             DatabaseColumnType.CHAR -> {
                 if (precision != null) {
                     "CHAR($precision)"
@@ -139,6 +166,7 @@ class MySqlDdlStrategy : DdlGenerationStrategy {
                     "CHAR(255)"
                 }
             }
+
             DatabaseColumnType.TEXT -> "TEXT"
             DatabaseColumnType.LONGTEXT -> "LONGTEXT"
             DatabaseColumnType.DATE -> "DATE"
@@ -154,21 +182,10 @@ class MySqlDdlStrategy : DdlGenerationStrategy {
     private fun buildColumnDefinition(field: LsiField): String {
         val builder = StringBuilder()
         val columnName = field.columnName ?: field.name ?: "unknown"
-        
-        // 检查是否为长文本字段
-        val columnTypeName = if (field.isText) {
-            // 根据长度选择TEXT类型
-            val length = field.length
-            when {
-                length > 16777215 -> "LONGTEXT"  // > 16MB 使用 LONGTEXT (最大4GB)
-                length > 65535 -> "MEDIUMTEXT"  // > 64KB 使用 MEDIUMTEXT (最大16MB)
-                else -> "TEXT"  // 默认 TEXT (最大64KB)
-            }
-        } else {
-            val columnType = field.getDatabaseColumnType()
-            getColumnTypeName(columnType)
-        }
-        
+
+        // 使用新的类型映射方法
+        val columnTypeName = mapFieldToColumnType(field)
+
         builder.append("`$columnName` $columnTypeName")
 
         if (!field.isNullable) {
@@ -188,5 +205,33 @@ class MySqlDdlStrategy : DdlGenerationStrategy {
         }
 
         return builder.toString()
+    }
+
+    /**
+     * MySQL字符串类型映射
+     *
+     * 根据长度智能选择：
+     * - <= 255: VARCHAR(n)
+     * - 256 - 65,535: VARCHAR(n) 或 TEXT
+     * - 65,536 - 16,777,215: MEDIUMTEXT
+     * - > 16,777,215: LONGTEXT
+     */
+    private fun mapStringType(field: LsiField): String {
+        // 1. 检查是否为长文本
+        if (field.isText) {
+            val length = field.length
+            return when {
+                length > 16_777_215 -> "LONGTEXT"
+                length > 65_535 -> "MEDIUMTEXT"
+                else -> "TEXT"
+            }
+        }
+
+        // 2. 普通字符串
+        val length = field.length
+        return when {
+            length > 0 -> "VARCHAR($length)"
+            else -> "VARCHAR(255)" // 默认长度
+        }
     }
 }

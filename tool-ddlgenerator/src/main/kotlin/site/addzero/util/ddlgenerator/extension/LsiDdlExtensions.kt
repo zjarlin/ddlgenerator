@@ -1,6 +1,6 @@
 package site.addzero.util.ddlgenerator.extension
 
-import site.addzero.util.ddlgenerator.api.DdlGeneratorFactory
+import site.addzero.util.ddlgenerator.api.DdlGenerator
 
 import site.addzero.util.db.DatabaseType
 import site.addzero.util.lsi.clazz.LsiClass
@@ -26,7 +26,7 @@ import site.addzero.util.lsi.field.LsiField
  * 生成CREATE TABLE的DDL语句
  */
 fun LsiClass.toCreateTableDDL(dialect: DatabaseType): String {
-    return DdlGeneratorFactory.getStrategy(dialect).generateCreateTable(this)
+    return DdlGenerator.getStrategy(dialect).generateCreateTable(this)
 }
 
 /**
@@ -40,7 +40,7 @@ fun LsiClass.toCreateTableDDL(dialectName: String): String {
  * 生成DROP TABLE的DDL语句
  */
 fun LsiClass.toDropTableDDL(dialect: DatabaseType): String {
-    return DdlGeneratorFactory.getStrategy(dialect).generateDropTable(this.guessTableName)
+    return DdlGenerator.getStrategy(dialect).generateDropTable(this.guessTableName)
 }
 
 /**
@@ -54,7 +54,7 @@ fun LsiClass.toDropTableDDL(dialectName: String): String {
  * 生成ALTER TABLE添加注释的DDL语句
  */
 fun LsiClass.toAddCommentDDL(dialect: DatabaseType): String {
-    return DdlGeneratorFactory.getStrategy(dialect).generateAddComment(this)
+    return DdlGenerator.getStrategy(dialect).generateAddComment(this)
 }
 
 /**
@@ -70,7 +70,7 @@ fun LsiClass.toAddCommentDDL(dialectName: String): String {
  * 生成ADD COLUMN的DDL语句
  */
 fun LsiField.toAddColumnDDL(tableName: String, dialect: DatabaseType): String {
-    return DdlGeneratorFactory.getStrategy(dialect).generateAddColumn(tableName, this)
+    return DdlGenerator.getStrategy(dialect).generateAddColumn(tableName, this)
 }
 
 /**
@@ -85,7 +85,7 @@ fun LsiField.toAddColumnDDL(tableName: String, dialectName: String): String {
  */
 fun LsiField.toDropColumnDDL(tableName: String, dialect: DatabaseType): String {
     val columnName = this.columnName ?: this.name ?: "unknown"
-    return DdlGeneratorFactory.getStrategy(dialect).generateDropColumn(tableName, columnName)
+    return DdlGenerator.getStrategy(dialect).generateDropColumn(tableName, columnName)
 }
 
 /**
@@ -99,7 +99,7 @@ fun LsiField.toDropColumnDDL(tableName: String, dialectName: String): String {
  * 生成MODIFY COLUMN的DDL语句
  */
 fun LsiField.toModifyColumnDDL(tableName: String, dialect: DatabaseType): String {
-    return DdlGeneratorFactory.getStrategy(dialect).generateModifyColumn(tableName, this)
+    return DdlGenerator.getStrategy(dialect).generateModifyColumn(tableName, this)
 }
 
 /**
@@ -115,7 +115,7 @@ fun LsiField.toModifyColumnDDL(tableName: String, dialectName: String): String {
  * 生成多个表的完整数据库schema（包括外键约束和注释）
  */
 fun List<LsiClass>.toSchemaDDL(dialect: DatabaseType): String {
-    return DdlGeneratorFactory.getStrategy(dialect).generateSchema(this)
+    return DdlGenerator.getStrategy(dialect).generateSchema(this)
 }
 
 /**

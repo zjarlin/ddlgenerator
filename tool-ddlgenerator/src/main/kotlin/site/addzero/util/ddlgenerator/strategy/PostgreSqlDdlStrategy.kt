@@ -1,5 +1,6 @@
 package site.addzero.util.ddlgenerator.strategy
 
+import site.addzero.ioc.annotation.Component
 import site.addzero.util.db.DatabaseType
 import site.addzero.util.ddlgenerator.api.DdlGenerationStrategy
 import site.addzero.util.lsi.clazz.LsiClass
@@ -10,21 +11,102 @@ import site.addzero.util.lsi.database.model.ForeignKeyInfo
 import site.addzero.util.lsi.field.LsiField
 import site.addzero.util.lsi_impl.impl.database.clazz.getAllDbFields
 import site.addzero.util.lsi_impl.impl.database.clazz.getDatabaseForeignKeys
-import site.addzero.util.lsi_impl.impl.database.field.getDatabaseColumnType
-import site.addzero.util.lsi_impl.impl.database.field.isAutoIncrement
-import site.addzero.util.lsi_impl.impl.database.field.isPrimaryKey
-import site.addzero.util.lsi_impl.impl.database.field.isSequence
-import site.addzero.util.lsi_impl.impl.database.field.isText
-import site.addzero.util.lsi_impl.impl.database.field.sequenceName
+import site.addzero.util.lsi_impl.impl.database.field.*
 
 /**
  * PostgreSQL方言的DDL生成策略
  */
+@Component
 class PostgreSqlDdlStrategy : DdlGenerationStrategy {
-    
-    private val columnTypeMapper = PostgreSqlColumnTypeMapper()
 
-    override fun getColumnTypeMapper() = columnTypeMapper
+    override val typeMappings: Map<String, (LsiField) -> String> = mapOf(
+        // 整数类型
+        "java.lang.Integer" to { "INTEGER" },
+        "java.lang.Long" to { "BIGINT" },
+        "java.lang.Short" to { "SMALLINT" },
+        "java.lang.Byte" to { "SMALLINT" }, // PostgreSQL没有TINYINT
+
+        // 浮点类型
+        "java.lang.Float" to { "REAL" },
+        "java.lang.Double" to { "DOUBLE PRECISION" },
+        "java.math.BigDecimal" to { field ->
+            val precision = field.precision
+            val scale = field.scale
+            when {
+                precision > 0 && scale > 0 -> "NUMERIC($precision, $scale)"
+                precision > 0 -> "NUMERIC($precision)"
+                else -> "NUMERIC(19, 2)"
+            }
+        },
+        "java.math.BigInteger" to { "NUMERIC(65, 0)" },
+
+        // 字符串类型
+        "java.lang.String" to { field -> mapStringType(field) },
+
+        // 字符类型
+        "java.lang.Character" to { "CHAR(1)" },
+
+        // 布尔类型
+        "java.lang.Boolean" to { "BOOLEAN" },
+
+        // 日期时间类型
+        "java.util.Date" to { "TIMESTAMP" },
+        "java.sql.Date" to { "DATE" },
+        "java.sql.Time" to { "TIME" },
+        "java.sql.Timestamp" to { "TIMESTAMP" },
+        "java.time.LocalDate" to { "DATE" },
+        "java.time.LocalTime" to { "TIME" },
+        "java.time.LocalDateTime" to { "TIMESTAMP" },
+        "java.time.ZonedDateTime" to { "TIMESTAMP WITH TIME ZONE" },
+        "java.time.OffsetDateTime" to { "TIMESTAMP WITH TIME ZONE" },
+        "java.time.Instant" to { "TIMESTAMP WITH TIME ZONE" },
+        "java.time.Duration" to { "INTERVAL" },
+
+        // 二进制类型
+        "byte[]" to { "BYTEA" },
+        "[B" to { "BYTEA" },
+
+        // UUID类型（PostgreSQL原生支持）
+        "java.util.UUID" to { "UUID" },
+
+        // JSON类型
+        "org.babyfish.jimmer.sql.JsonNode" to { "JSONB" },
+        "com.fasterxml.jackson.databind.JsonNode" to { "JSONB" },
+
+        // 数组类型（PostgreSQL特有）
+        "java.lang.Integer[]" to { "INTEGER[]" },
+        "java.lang.Long[]" to { "BIGINT[]" },
+        "java.lang.String[]" to { "TEXT[]" },
+        "[Ljava.lang.Integer;" to { "INTEGER[]" },
+        "[Ljava.lang.Long;" to { "BIGINT[]" },
+        "[Ljava.lang.String;" to { "TEXT[]" }
+    )
+
+    override val simpleTypeMappings: Map<String, (LsiField) -> String> = mapOf(
+        // Kotlin类型
+        "Int" to { "INTEGER" },
+        "Long" to { "BIGINT" },
+        "Short" to { "SMALLINT" },
+        "Byte" to { "SMALLINT" },
+        "Float" to { "REAL" },
+        "Double" to { "DOUBLE PRECISION" },
+        "String" to { field -> mapStringType(field) },
+        "Char" to { "CHAR(1)" },
+        "Boolean" to { "BOOLEAN" },
+
+        // Kotlin日期时间
+        "LocalDate" to { "DATE" },
+        "LocalTime" to { "TIME" },
+        "LocalDateTime" to { "TIMESTAMP" },
+        "Instant" to { "TIMESTAMP WITH TIME ZONE" },
+        "Duration" to { "INTERVAL" },
+
+        // Kotlin数组
+        "IntArray" to { "INTEGER[]" },
+        "LongArray" to { "BIGINT[]" },
+        "Array<String>" to { "TEXT[]" }
+    )
+
 
     override fun supports(dialect: DatabaseType): Boolean {
         return dialect == DatabaseType.POSTGRESQL
@@ -64,7 +146,7 @@ class PostgreSqlDdlStrategy : DdlGenerationStrategy {
         val statements = mutableListOf<String>()
 
         // PostgreSQL需要分别修改类型、可空性、默认值
-        statements.add("ALTER TABLE \"$tableName\" ALTER COLUMN \"$columnName\" TYPE ${getColumnTypeName(columnType)};")
+        statements.add("ALTER TABLE \"$tableName\" ALTER COLUMN \"$columnName\" TYPE ${mapFieldToColumnType(field)};")
 
         if (!field.isNullable) {
             statements.add("ALTER TABLE \"$tableName\" ALTER COLUMN \"$columnName\" SET NOT NULL;")
@@ -192,15 +274,10 @@ class PostgreSqlDdlStrategy : DdlGenerationStrategy {
     private fun buildColumnDefinition(field: LsiField): String {
         val builder = StringBuilder()
         val columnName = field.columnName ?: field.name ?: "unknown"
-        
-        // 检查是否为长文本字段
-        val columnTypeName = if (field.isText) {
-            "TEXT"  // PostgreSQL的TEXT类型没有长度限制，统一使用TEXT
-        } else {
-            val columnType = field.getDatabaseColumnType()
-            getColumnTypeName(columnType)
-        }
-        
+
+        // 使用新的类型映射方法
+        val columnTypeName = mapFieldToColumnType(field)
+
         builder.append("\"$columnName\" $columnTypeName")
 
         if (!field.isNullable) {
@@ -228,5 +305,27 @@ class PostgreSqlDdlStrategy : DdlGenerationStrategy {
         }
 
         return builder.toString()
+    }
+
+    /**
+     * PostgreSQL字符串类型映射
+     *
+     * PostgreSQL的TEXT类型没有长度限制，性能与VARCHAR相同
+     * 推荐策略：
+     * - 有明确长度限制的用VARCHAR(n)
+     * - 长文本统一用TEXT
+     */
+    private fun mapStringType(field: LsiField): String {
+        // 1. 检查是否为长文本
+        if (field.isText) {
+            return "TEXT"
+        }
+
+        // 2. 普通字符串
+        val length = field.length
+        return when {
+            length > 0 -> "VARCHAR($length)"
+            else -> "VARCHAR(255)" // 默认长度
+        }
     }
 }

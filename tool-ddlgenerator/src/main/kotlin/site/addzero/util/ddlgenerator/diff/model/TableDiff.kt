@@ -1,5 +1,6 @@
 package site.addzero.util.ddlgenerator.diff.model
 
+import site.addzero.util.ddlgenerator.config.Settings
 import site.addzero.entity.JdbcColumnMetadata
 import site.addzero.util.lsi.clazz.LsiClass
 import site.addzero.util.lsi.field.LsiField
@@ -62,11 +63,11 @@ data class SchemaDiff(
     val newTables: List<LsiClass> = emptyList(),
     val droppedTables: List<String> = emptyList(),
     val modifiedTables: List<ModifiedTableInfo> = emptyList(),
-    val config: DiffConfig = DiffConfig()
+    val config: Settings = Settings.DEFAULT
 ) {
     val hasChanges: Boolean
-        get() = newTables.isNotEmpty() || 
-                (config.allowDrop && droppedTables.isNotEmpty()) || 
+        get() = newTables.isNotEmpty() ||
+                (config.allowDrop && droppedTables.isNotEmpty()) ||
                 modifiedTables.any { it.diff.hasChanges }
 }
 
@@ -78,13 +79,3 @@ data class ModifiedTableInfo(
     val diff: TableDiff.ModifiedTable
 )
 
-/**
- * 差异配置
- */
-data class DiffConfig(
-    val allowDrop: Boolean = false,                    // 是否允许生成 DROP 语句
-    val ignoreCase: Boolean = true,                    // 名称比对是否忽略大小写
-    val compareComments: Boolean = true,               // 是否比对注释
-    val autoConvertTypes: Boolean = true,              // 是否自动转换类型（如 varchar <-> string）
-    val strictTypeMatch: Boolean = false               // 严格类型匹配（长度必须完全一致）
-)

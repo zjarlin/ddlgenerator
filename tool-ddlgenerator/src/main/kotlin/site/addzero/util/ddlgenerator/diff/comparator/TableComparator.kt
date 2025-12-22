@@ -1,13 +1,14 @@
 package site.addzero.util.ddlgenerator.diff.comparator
 
+import org.babyfish.jimmer.apt.config.Settings
+import site.addzero.util.ddlgenerator.config.Settings
 import site.addzero.util.ddlgenerator.diff.matcher.ColumnMatcher
 import site.addzero.util.ddlgenerator.diff.model.*
-
 import site.addzero.entity.JdbcColumnMetadata
 import site.addzero.entity.JdbcTableMetadata
 import site.addzero.util.lsi.clazz.LsiClass
 import site.addzero.util.lsi.clazz.guessTableName
-import site.addzero.util.lsi.database.databaseFields
+import site.addzero.util.lsi_impl.impl.database.clazz.getAllDbFields
 
 /**
  * 表比对器接口
@@ -16,15 +17,15 @@ interface TableComparator {
     /**
      * 对比单个表
      */
-    fun compare(lsiClass: LsiClass, dbTable: JdbcTableMetadata?, config: DiffConfig = DiffConfig()): TableDiff
-    
+    fun compare(lsiClass: LsiClass, dbTable: JdbcTableMetadata?, config: Settings = Settings.DEFAULT): TableDiff
+
     /**
      * 对比整个 Schema
      */
     fun compareSchema(
         lsiClasses: List<LsiClass>,
         dbTables: List<JdbcTableMetadata>,
-        config: DiffConfig = DiffConfig()
+        config: Settings = Settings.DEFAULT
     ): SchemaDiff
 }
 
@@ -33,14 +34,14 @@ interface TableComparator {
  */
 class DefaultTableComparator : TableComparator {
     
-    override fun compare(lsiClass: LsiClass, dbTable: JdbcTableMetadata?, config: DiffConfig): TableDiff {
+    override fun compare(lsiClass: LsiClass, dbTable: JdbcTableMetadata?, config: Settings): TableDiff {
         // 如果数据库表不存在，返回新增表
         if (dbTable == null) {
             return TableDiff.NewTable(lsiClass)
         }
         
         val tableName = lsiClass.guessTableName
-        val lsiFields = lsiClass.databaseFields
+        val lsiFields = lsiClass.getAllDbFields()
         val dbColumns = dbTable.columns
         
         // 按名称建立映射（忽略大小写）
@@ -100,7 +101,7 @@ class DefaultTableComparator : TableComparator {
     override fun compareSchema(
         lsiClasses: List<LsiClass>,
         dbTables: List<JdbcTableMetadata>,
-        config: DiffConfig
+        config: Settings
     ): SchemaDiff {
         // 按表名建立映射
         val dbTableMap = dbTables.associateBy { 

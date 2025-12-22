@@ -1,7 +1,7 @@
 package site.addzero.util.ddlgenerator.extension
 
 import site.addzero.util.db.DatabaseType
-import site.addzero.util.ddlgenerator.api.DdlGeneratorFactory
+import site.addzero.util.ddlgenerator.api.DdlGenerator
 import site.addzero.util.lsi.clazz.LsiClass
 import site.addzero.util.lsi.clazz.guessTableName
 import site.addzero.util.lsi.database.scanManyToManyTables
@@ -29,7 +29,7 @@ fun List<LsiClass>.toCompleteSchemaDDL(
     includeManyToManyTables: Boolean = true,
     includeForeignKeys: Boolean = true
 ): String {
-    val strategy = DdlGeneratorFactory.getStrategy(dialect)
+    val strategy = DdlGenerator.getStrategy(dialect)
     val statements = mutableListOf<String>()
     
     // ===== 第一阶段：创建所有表（不含外键） =====
@@ -145,7 +145,7 @@ fun List<LsiClass>.toCompleteSchemaDDL(
  * 仅生成索引DDL
  */
 fun LsiClass.toIndexesDDL(dialect: DatabaseType): String {
-    val strategy = DdlGeneratorFactory.getStrategy(dialect)
+    val strategy = DdlGenerator.getStrategy(dialect)
     val indexes = this.getIndexDefinitions()
     
     if (indexes.isEmpty()) {
@@ -162,7 +162,7 @@ fun LsiClass.toIndexesDDL(dialect: DatabaseType): String {
  * 仅生成多对多中间表DDL
  */
 fun List<LsiClass>.toManyToManyTablesDDL(dialect: DatabaseType): String {
-    val strategy = DdlGeneratorFactory.getStrategy(dialect)
+    val strategy = DdlGenerator.getStrategy(dialect)
     val tables = this.scanManyToManyTables()
     
     if (tables.isEmpty()) {
