@@ -1,6 +1,7 @@
 package site.addzero.util.ddlgenerator.api
 
 import site.addzero.util.db.DatabaseType
+import site.addzero.util.ddlgenerator.assist.mapStringType
 import site.addzero.util.lsi.clazz.LsiClass
 import site.addzero.util.lsi.database.model.ForeignKeyInfo
 import site.addzero.util.lsi.database.model.IndexDefinition
@@ -8,13 +9,20 @@ import site.addzero.util.lsi.database.model.ManyToManyTable
 import site.addzero.util.lsi.field.LsiField
 import site.addzero.util.lsi_impl.impl.database.clazz.getAllDbFields
 import site.addzero.util.lsi_impl.impl.database.clazz.getDatabaseForeignKeys
+
 interface DdlGenerationStrategy {
-
     /**
-     * 默认映射（当没有匹配的类型时）
+     * 默认映射
      */
-    fun getDefaultMapping(field: LsiField): String = "VARCHAR(255)"
-
+    private val defaultSimpleTypeMappings: MutableMap<String, (LsiField) -> String>
+        get() = mutableMapOf(
+            "String" to { field ->
+                mapStringType(field)
+            },
+            "Long" to { "BIGINT" },
+            "Short" to { "SMALLINT" },
+            "Short" to { "BIGINT" },
+        )
 
     /**
      * 检查此策略是否支持给定的数据库方言
@@ -93,21 +101,24 @@ interface DdlGenerationStrategy {
     /**
      * 生成基于多个 LSI 类的完整DDL语句（考虑表之间的依赖关系）
      */
-    fun generateSchema(lsiClasses: List<LsiClass>): String {
+    fun generateAll(lsiClasses: List<LsiClass>): String {
         // 默认实现：先创建所有表，然后添加外键约束和注释
         val createTableStatements = lsiClasses.map { lsiClass -> generateCreateTable(lsiClass) }
         val addConstraintsStatements = lsiClasses.flatMap { lsiClass ->
             val foreignKeyStatements = lsiClass.getDatabaseForeignKeys().map { fk ->
                 generateAddForeignKey(lsiClass.name ?: "", fk)
             }
-            val commentStatements = if (lsiClass.comment != null || lsiClass.getAllDbFields().any { it.comment != null }) {
-                listOf(generateAddComment(lsiClass))
-            } else {
-                emptyList()
-            }
+            val commentStatements =
+                if (lsiClass.comment != null || lsiClass.getAllDbFields().any { it.comment != null }) {
+                    listOf(generateAddComment(lsiClass))
+                } else {
+                    emptyList()
+                }
             foreignKeyStatements + commentStatements
         }
 
         return (createTableStatements + addConstraintsStatements).joinToString("\n\n")
     }
+
+    val simpleTypeMappings: Map<String, (LsiField) -> String>
 }

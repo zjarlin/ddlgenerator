@@ -1,7 +1,7 @@
 package site.addzero.util.ddlgenerator.diff.matcher
 
-import site.addzero.util.ddlgenerator.config.Settings
-import site.addzero.util.ddlgenerator.diff.model.ColumnModification
+import org.babyfish.jimmer.apt.config.Settings
+import site.addzero.util.ddlgenerator.delta.ColumnModification
 
 import site.addzero.entity.JdbcColumnMetadata
 import site.addzero.util.lsi.database.model.DatabaseColumnType
@@ -21,7 +21,7 @@ object ColumnMatcher {
     fun isColumnMatched(
         field: LsiField,
         dbColumn: JdbcColumnMetadata,
-        config: Settings = Settings.DEFAULT
+        config : Settings
     ): Boolean {
         val changes = detectChanges(field, dbColumn, config)
         return changes.isEmpty()
@@ -43,12 +43,10 @@ object ColumnMatcher {
         }
         
         // 长度检查（仅对字符串类型）
-        if (!config.strictTypeMatch && isStringType(field.getDatabaseColumnType())) {
             if (!isLengthMatched(field, dbColumn)) {
                 changes.add(ColumnModification.ColumnChangeType.LENGTH_CHANGED)
             }
-        }
-        
+
         // 可空性检查
         if (!isNullableMatched(field, dbColumn)) {
             changes.add(ColumnModification.ColumnChangeType.NULLABLE_CHANGED)

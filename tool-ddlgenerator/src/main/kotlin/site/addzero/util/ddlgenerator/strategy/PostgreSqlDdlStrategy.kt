@@ -6,7 +6,6 @@ import site.addzero.util.ddlgenerator.api.DdlGenerationStrategy
 import site.addzero.util.lsi.clazz.LsiClass
 import site.addzero.util.lsi.clazz.guessTableName
 import site.addzero.util.lsi.database.*
-import site.addzero.util.lsi.database.model.DatabaseColumnType
 import site.addzero.util.lsi.database.model.ForeignKeyInfo
 import site.addzero.util.lsi.field.LsiField
 import site.addzero.util.lsi_impl.impl.database.clazz.getAllDbFields
@@ -19,17 +18,17 @@ import site.addzero.util.lsi_impl.impl.database.field.*
 @Component
 class PostgreSqlDdlStrategy : DdlGenerationStrategy {
 
-    override val typeMappings: Map<String, (LsiField) -> String> = mapOf(
+    override val simpleTypeMappings: Map<String, (LsiField) -> String> = mapOf(
         // 整数类型
-        "java.lang.Integer" to { "INTEGER" },
-        "java.lang.Long" to { "BIGINT" },
-        "java.lang.Short" to { "SMALLINT" },
-        "java.lang.Byte" to { "SMALLINT" }, // PostgreSQL没有TINYINT
+        "Integer" to { "INTEGER" },
+        "Long" to { "BIGINT" },
+        "Short" to { "SMALLINT" },
+        "Byte" to { "SMALLINT" }, // PostgreSQL没有TINYINT
 
         // 浮点类型
-        "java.lang.Float" to { "REAL" },
-        "java.lang.Double" to { "DOUBLE PRECISION" },
-        "java.math.BigDecimal" to { field ->
+        "Float" to { "REAL" },
+        "Double" to { "DOUBLE PRECISION" },
+        "BigDecimal" to { field ->
             val precision = field.precision
             val scale = field.scale
             when {
@@ -38,68 +37,48 @@ class PostgreSqlDdlStrategy : DdlGenerationStrategy {
                 else -> "NUMERIC(19, 2)"
             }
         },
-        "java.math.BigInteger" to { "NUMERIC(65, 0)" },
+        "BigInteger" to { "NUMERIC(65, 0)" },
 
         // 字符串类型
-        "java.lang.String" to { field -> mapStringType(field) },
+        "String" to { field -> mapStringType(field) },
 
         // 字符类型
-        "java.lang.Character" to { "CHAR(1)" },
+        "Character" to { "CHAR(1)" },
+        "Char" to { "CHAR(1)" },
 
         // 布尔类型
-        "java.lang.Boolean" to { "BOOLEAN" },
+        "Boolean" to { "BOOLEAN" },
 
         // 日期时间类型
-        "java.util.Date" to { "TIMESTAMP" },
-        "java.sql.Date" to { "DATE" },
-        "java.sql.Time" to { "TIME" },
-        "java.sql.Timestamp" to { "TIMESTAMP" },
-        "java.time.LocalDate" to { "DATE" },
-        "java.time.LocalTime" to { "TIME" },
-        "java.time.LocalDateTime" to { "TIMESTAMP" },
-        "java.time.ZonedDateTime" to { "TIMESTAMP WITH TIME ZONE" },
-        "java.time.OffsetDateTime" to { "TIMESTAMP WITH TIME ZONE" },
-        "java.time.Instant" to { "TIMESTAMP WITH TIME ZONE" },
-        "java.time.Duration" to { "INTERVAL" },
+        "Date" to { "TIMESTAMP" },
+        "sqlDate" to { "DATE" },
+        "sqlTime" to { "TIME" },
+        "sqlTimestamp" to { "TIMESTAMP" },
+        "LocalDate" to { "DATE" },
+        "LocalTime" to { "TIME" },
+        "LocalDateTime" to { "TIMESTAMP" },
+        "ZonedDateTime" to { "TIMESTAMP WITH TIME ZONE" },
+        "OffsetDateTime" to { "TIMESTAMP WITH TIME ZONE" },
+        "Instant" to { "TIMESTAMP WITH TIME ZONE" },
+        "Duration" to { "INTERVAL" },
 
         // 二进制类型
         "byte[]" to { "BYTEA" },
         "[B" to { "BYTEA" },
 
         // UUID类型（PostgreSQL原生支持）
-        "java.util.UUID" to { "UUID" },
+        "UUID" to { "UUID" },
 
         // JSON类型
-        "org.babyfish.jimmer.sql.JsonNode" to { "JSONB" },
-        "com.fasterxml.jackson.databind.JsonNode" to { "JSONB" },
+        "JsonNode" to { "JSONB" },
 
         // 数组类型（PostgreSQL特有）
-        "java.lang.Integer[]" to { "INTEGER[]" },
-        "java.lang.Long[]" to { "BIGINT[]" },
-        "java.lang.String[]" to { "TEXT[]" },
+        "Integer[]" to { "INTEGER[]" },
+        "Long[]" to { "BIGINT[]" },
+        "String[]" to { "TEXT[]" },
         "[Ljava.lang.Integer;" to { "INTEGER[]" },
         "[Ljava.lang.Long;" to { "BIGINT[]" },
-        "[Ljava.lang.String;" to { "TEXT[]" }
-    )
-
-    override val simpleTypeMappings: Map<String, (LsiField) -> String> = mapOf(
-        // Kotlin类型
-        "Int" to { "INTEGER" },
-        "Long" to { "BIGINT" },
-        "Short" to { "SMALLINT" },
-        "Byte" to { "SMALLINT" },
-        "Float" to { "REAL" },
-        "Double" to { "DOUBLE PRECISION" },
-        "String" to { field -> mapStringType(field) },
-        "Char" to { "CHAR(1)" },
-        "Boolean" to { "BOOLEAN" },
-
-        // Kotlin日期时间
-        "LocalDate" to { "DATE" },
-        "LocalTime" to { "TIME" },
-        "LocalDateTime" to { "TIMESTAMP" },
-        "Instant" to { "TIMESTAMP WITH TIME ZONE" },
-        "Duration" to { "INTERVAL" },
+        "[Ljava.lang.String;" to { "TEXT[]" },
 
         // Kotlin数组
         "IntArray" to { "INTEGER[]" },
@@ -142,11 +121,10 @@ class PostgreSqlDdlStrategy : DdlGenerationStrategy {
 
     override fun generateModifyColumn(tableName: String, field: LsiField): String {
         val columnName = field.columnName ?: field.name ?: "unknown"
-        val columnType = field.getDatabaseColumnType()
         val statements = mutableListOf<String>()
 
         // PostgreSQL需要分别修改类型、可空性、默认值
-        statements.add("ALTER TABLE \"$tableName\" ALTER COLUMN \"$columnName\" TYPE ${mapFieldToColumnType(field)};")
+        statements.add("ALTER TABLE \"$tableName\" ALTER COLUMN \"$columnName\" TYPE ${mapFieldToColumnType(field)};");
 
         if (!field.isNullable) {
             statements.add("ALTER TABLE \"$tableName\" ALTER COLUMN \"$columnName\" SET NOT NULL;")
@@ -183,7 +161,7 @@ class PostgreSqlDdlStrategy : DdlGenerationStrategy {
         return statements.joinToString("\n")
     }
 
-    override fun generateSchema(lsiClasses: List<LsiClass>): String {
+    override fun generateAll(lsiClasses: List<LsiClass>): String {
         val statements = mutableListOf<String>()
         
         // 1. 创建所有需要的序列
@@ -226,49 +204,6 @@ class PostgreSqlDdlStrategy : DdlGenerationStrategy {
      */
     private fun generateCreateSequence(sequenceName: String): String {
         return "CREATE SEQUENCE IF NOT EXISTS \"$sequenceName\" INCREMENT BY 1 START WITH 1;"
-    }
-
-    override fun getColumnTypeName(columnType: DatabaseColumnType, precision: Int?, scale: Int?): String {
-        return when (columnType) {
-            DatabaseColumnType.INT -> "INTEGER"
-            DatabaseColumnType.BIGINT -> "BIGINT"
-            DatabaseColumnType.SMALLINT -> "SMALLINT"
-            DatabaseColumnType.TINYINT -> "SMALLINT"
-            DatabaseColumnType.DECIMAL -> {
-                if (precision != null && scale != null) {
-                    "DECIMAL($precision, $scale)"
-                } else if (precision != null) {
-                    "DECIMAL($precision)"
-                } else {
-                    "DECIMAL"
-                }
-            }
-            DatabaseColumnType.FLOAT -> "REAL"
-            DatabaseColumnType.DOUBLE -> "DOUBLE PRECISION"
-            DatabaseColumnType.VARCHAR -> {
-                if (precision != null) {
-                    "VARCHAR($precision)"
-                } else {
-                    "VARCHAR(255)"
-                }
-            }
-            DatabaseColumnType.CHAR -> {
-                if (precision != null) {
-                    "CHAR($precision)"
-                } else {
-                    "CHAR(255)"
-                }
-            }
-            DatabaseColumnType.TEXT -> "TEXT"
-            DatabaseColumnType.LONGTEXT -> "TEXT"
-            DatabaseColumnType.DATE -> "DATE"
-            DatabaseColumnType.TIME -> "TIME"
-            DatabaseColumnType.DATETIME -> "TIMESTAMP"
-            DatabaseColumnType.TIMESTAMP -> "TIMESTAMP"
-            DatabaseColumnType.BOOLEAN -> "BOOLEAN"
-            DatabaseColumnType.BLOB -> "BYTEA"
-            DatabaseColumnType.BYTES -> "BYTEA"
-        }
     }
 
     private fun buildColumnDefinition(field: LsiField): String {
@@ -327,5 +262,13 @@ class PostgreSqlDdlStrategy : DdlGenerationStrategy {
             length > 0 -> "VARCHAR($length)"
             else -> "VARCHAR(255)" // 默认长度
         }
+    }
+
+    /**
+     * 将字段类型映射到数据库列类型
+     */
+    private fun mapFieldToColumnType(field: LsiField): String {
+        val typeName = field.typeName ?: return "TEXT"
+        return simpleTypeMappings[typeName]?.invoke(field) ?: "TEXT"
     }
 }

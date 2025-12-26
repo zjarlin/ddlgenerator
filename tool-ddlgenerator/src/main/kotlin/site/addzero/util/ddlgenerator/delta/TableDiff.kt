@@ -1,6 +1,5 @@
-package site.addzero.util.ddlgenerator.diff.model
+package site.addzero.util.ddlgenerator.delta
 
-import site.addzero.util.ddlgenerator.config.Settings
 import site.addzero.entity.JdbcColumnMetadata
 import site.addzero.util.lsi.clazz.LsiClass
 import site.addzero.util.lsi.field.LsiField
@@ -13,12 +12,12 @@ sealed class TableDiff {
      * 新增表
      */
     data class NewTable(val lsiClass: LsiClass) : TableDiff()
-    
+
     /**
      * 删除表
      */
     data class DroppedTable(val tableName: String, val schema: String? = null) : TableDiff()
-    
+
     /**
      * 修改表
      */
@@ -32,7 +31,7 @@ sealed class TableDiff {
         val hasChanges: Boolean
             get() = addedColumns.isNotEmpty() || droppedColumns.isNotEmpty() || modifiedColumns.isNotEmpty()
     }
-    
+
     /**
      * 无变化
      */
@@ -59,23 +58,3 @@ data class ColumnModification(
 /**
  * Schema 差异
  */
-data class SchemaDiff(
-    val newTables: List<LsiClass> = emptyList(),
-    val droppedTables: List<String> = emptyList(),
-    val modifiedTables: List<ModifiedTableInfo> = emptyList(),
-    val config: Settings = Settings.DEFAULT
-) {
-    val hasChanges: Boolean
-        get() = newTables.isNotEmpty() ||
-                (config.allowDrop && droppedTables.isNotEmpty()) ||
-                modifiedTables.any { it.diff.hasChanges }
-}
-
-/**
- * 修改表信息（包含 LsiClass 引用）
- */
-data class ModifiedTableInfo(
-    val lsiClass: LsiClass,
-    val diff: TableDiff.ModifiedTable
-)
-

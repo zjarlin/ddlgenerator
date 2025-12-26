@@ -26,7 +26,8 @@ import site.addzero.util.lsi.field.LsiField
  * 生成CREATE TABLE的DDL语句
  */
 fun LsiClass.toCreateTableDDL(dialect: DatabaseType): String {
-    return DdlGenerator.getStrategy(dialect).generateCreateTable(this)
+    val strategy = DdlGenerator.getStrategy(dialect)
+    return strategy.generateCreateTable(this)
 }
 
 /**
