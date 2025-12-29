@@ -3,7 +3,7 @@
 plugins {
     id("site.addzero.gradle.plugin.kotlin-convention") version "+"
     id("site.addzero.gradle.plugin.processorbuddy.processor-buddy") version "2025.12.31.1327"
-    id("koin-convention")
+//    id("site.addzero.gradle.plugin.koin-convention") version "2025.12.30"
 }
 //processorBuddy {
 //    mustMap = autoddlConfigMap
@@ -19,7 +19,7 @@ plugins {
 //}
 //
 dependencies {
-    implementation(project(":checkouts:lsi:lsi-core"))
+//    implementation(project(":checkouts:lsi:lsi-core"))
 //    implementation(project(":project:jimmer-core"))
     implementation("site.addzero:tool-database-model:2025.12.23")
     implementation("site.addzero:tool-jdbc:2025.12.24")
