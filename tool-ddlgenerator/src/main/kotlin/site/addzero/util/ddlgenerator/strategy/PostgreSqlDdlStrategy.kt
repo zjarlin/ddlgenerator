@@ -1,8 +1,10 @@
 package site.addzero.util.ddlgenerator.strategy
 
+import org.babyfish.jimmer.config.autoddl.Settings
 import site.addzero.ioc.annotation.Component
 import site.addzero.util.db.DatabaseType
-import site.addzero.util.ddlgenerator.api.DdlGenerationStrategy
+import site.addzero.util.lsi.database.dialect.DdlGenerationStrategy
+import site.addzero.util.ddlgenerator.config.databaseType
 import site.addzero.util.lsi.clazz.LsiClass
 import site.addzero.util.lsi.clazz.guessTableName
 import site.addzero.util.lsi.database.*
@@ -15,7 +17,7 @@ import site.addzero.util.lsi_impl.impl.database.field.*
 /**
  * PostgreSQL方言的DDL生成策略
  */
-@Component
+@Single
 class PostgreSqlDdlStrategy : DdlGenerationStrategy {
 
     override val simpleTypeMappings: Map<String, (LsiField) -> String> = mapOf(
@@ -87,8 +89,8 @@ class PostgreSqlDdlStrategy : DdlGenerationStrategy {
     )
 
 
-    override fun supports(dialect: DatabaseType): Boolean {
-        return dialect == DatabaseType.POSTGRESQL
+    override fun supports(): Boolean {
+        return Settings.databaseType==DatabaseType.POSTGRESQL
     }
 
     override fun generateCreateTable(lsiClass: LsiClass): String {

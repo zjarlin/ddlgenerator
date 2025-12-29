@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
 import site.addzero.util.db.DatabaseType
 import site.addzero.util.ddlgenerator.extension.toCreateTableDDL
-import site.addzero.util.ddlgenerator.extension.toIndexesDDL
+import site.addzero.util.ddlgenerator.extension.toUniqueKeysDDL
 
 /**
  * Jimmer @Key(group=) 联合索引测试
@@ -51,7 +51,7 @@ class JimmerKeyGroupTest {
         )
 
         // When: 生成索引DDL
-        val indexDdl = user.toIndexesDDL(DatabaseType.MYSQL)
+        val indexDdl = user.toUniqueKeysDDL(DatabaseType.MYSQL)
 
         // Then: 验证单字段唯一索引
         println("=== Single Key Indexes ===")
@@ -107,7 +107,7 @@ class JimmerKeyGroupTest {
         )
 
         // When: 生成索引DDL
-        val indexDdl = order.toIndexesDDL(DatabaseType.MYSQL)
+        val indexDdl = order.toUniqueKeysDDL(DatabaseType.MYSQL)
 
         // Then: 验证联合唯一索引
         println("=== Composite Unique Index (group=business_key) ===")
@@ -179,7 +179,7 @@ class JimmerKeyGroupTest {
         )
 
         // When: 生成索引DDL
-        val indexDdl = product.toIndexesDDL(DatabaseType.MYSQL)
+        val indexDdl = product.toUniqueKeysDDL(DatabaseType.MYSQL)
 
         // Then: 验证多个索引
         println("=== Multiple Groups and Single Key ===")
@@ -247,7 +247,7 @@ class JimmerKeyGroupTest {
 
         // When: 生成完整DDL
         val tableDdl = salesOrder.toCreateTableDDL(DatabaseType.MYSQL)
-        val indexDdl = salesOrder.toIndexesDDL(DatabaseType.MYSQL)
+        val indexDdl = salesOrder.toUniqueKeysDDL(DatabaseType.MYSQL)
 
         // Then: 输出完整DDL
         println("=== Complete Sales Order DDL ===")

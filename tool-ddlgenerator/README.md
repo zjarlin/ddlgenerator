@@ -10,15 +10,14 @@ plugins {
 }
 
 ksp {
-    arg("springResourcePath", "")
     arg("jdbcUrl", "")
     arg("jdbcUsername", "")
     arg("jdbcPassword", "")
-    arg("jdbcPassword1", "true")
-    arg("jdbcPassword2", "1")
-    arg("jdbcPassword3", "1.1")
-    arg("jdbcPassword4", "false")
-    arg("autoddlExcludeTables", "1,2,3,333")
+    arg("autoddlForeignKeys", "true")
+    arg("autoddlKeys", "true")
+    arg("autoddlAllowDeleteColumn", "false")
+    arg("springResourcePath", "")
+    arg("autoddlExcludeTables", "flyway_schema_history,vector_store,*_mapping")
 }
 \`\`\`
 
@@ -28,15 +27,14 @@ ksp {
 
 \`\`\`xml
 <properties>
-    <apt.springResourcePath></apt.springResourcePath>
     <apt.jdbcUrl></apt.jdbcUrl>
     <apt.jdbcUsername></apt.jdbcUsername>
     <apt.jdbcPassword></apt.jdbcPassword>
-    <apt.jdbcPassword1>true</apt.jdbcPassword1>
-    <apt.jdbcPassword2>1</apt.jdbcPassword2>
-    <apt.jdbcPassword3>1.1</apt.jdbcPassword3>
-    <apt.jdbcPassword4>false</apt.jdbcPassword4>
-    <apt.autoddlExcludeTables>1,2,3,333</apt.autoddlExcludeTables>
+    <apt.autoddlForeignKeys>true</apt.autoddlForeignKeys>
+    <apt.autoddlKeys>true</apt.autoddlKeys>
+    <apt.autoddlAllowDeleteColumn>false</apt.autoddlAllowDeleteColumn>
+    <apt.springResourcePath></apt.springResourcePath>
+    <apt.autoddlExcludeTables>flyway_schema_history,vector_store,*_mapping</apt.autoddlExcludeTables>
 </properties>
 
 <build>
@@ -46,14 +44,13 @@ ksp {
             <artifactId>maven-compiler-plugin</artifactId>
             <configuration>
                 <compilerArgs>
-                    <arg>-AspringResourcePath=${apt.springResourcePath}</arg>
                     <arg>-AjdbcUrl=${apt.jdbcUrl}</arg>
                     <arg>-AjdbcUsername=${apt.jdbcUsername}</arg>
                     <arg>-AjdbcPassword=${apt.jdbcPassword}</arg>
-                    <arg>-AjdbcPassword1=${apt.jdbcPassword1}</arg>
-                    <arg>-AjdbcPassword2=${apt.jdbcPassword2}</arg>
-                    <arg>-AjdbcPassword3=${apt.jdbcPassword3}</arg>
-                    <arg>-AjdbcPassword4=${apt.jdbcPassword4}</arg>
+                    <arg>-AautoddlForeignKeys=${apt.autoddlForeignKeys}</arg>
+                    <arg>-AautoddlKeys=${apt.autoddlKeys}</arg>
+                    <arg>-AautoddlAllowDeleteColumn=${apt.autoddlAllowDeleteColumn}</arg>
+                    <arg>-AspringResourcePath=${apt.springResourcePath}</arg>
                     <arg>-AautoddlExcludeTables=${apt.autoddlExcludeTables}</arg>
                 </compilerArgs>
             </configuration>
@@ -75,15 +72,14 @@ plugins {
 
 processorBuddy {
     mustMap.set(mapOf(
-        "springResourcePath" to "",
         "jdbcUrl" to "",
         "jdbcUsername" to "",
         "jdbcPassword" to "",
-        "jdbcPassword1" to "true",
-        "jdbcPassword2" to "1",
-        "jdbcPassword3" to "1.1",
-        "jdbcPassword4" to "false",
-        "autoddlExcludeTables" to "1,2,3,333"
+        "autoddlForeignKeys" to "true",
+        "autoddlKeys" to "true",
+        "autoddlAllowDeleteColumn" to "false",
+        "springResourcePath" to "",
+        "autoddlExcludeTables" to "flyway_schema_history,vector_store,*_mapping"
     ))
 }
 \`\`\`

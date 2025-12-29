@@ -1,49 +1,34 @@
 package site.addzero.util.ddlgenerator.strategy
 
+import org.babyfish.jimmer.config.autoddl.Settings
 import site.addzero.ioc.annotation.Component
 import site.addzero.util.db.DatabaseType
-import site.addzero.util.ddlgenerator.api.DdlGenerationStrategy
-import site.addzero.util.ddlgenerator.assist.defaultSimpleTypeMappings
-import site.addzero.util.ddlgenerator.assist.mapStringType
+import site.addzero.util.lsi.database.dialect.DdlGenerationStrategy
+import site.addzero.util.ddlgenerator.assist.getNativeTypeString
+import site.addzero.util.ddlgenerator.config.databaseType
+import site.addzero.util.ddlgenerator.config.strategy
 import site.addzero.util.lsi.clazz.LsiClass
 import site.addzero.util.lsi.clazz.guessTableName
 import site.addzero.util.lsi.database.model.ForeignKeyInfo
 import site.addzero.util.lsi.field.LsiField
 import site.addzero.util.lsi_impl.impl.database.clazz.getAllDbFields
-import site.addzero.util.lsi_impl.impl.database.clazz.getDatabaseForeignKeys
-import site.addzero.util.lsi_impl.impl.database.field.*
+import site.addzero.util.lsi_impl.impl.database.field.getDatabaseColumnType
+import site.addzero.util.lsi_impl.impl.database.field.isAutoIncrement
+import site.addzero.util.lsi_impl.impl.database.field.isPrimaryKey
 
 /**
  * MySQL方言的DDL生成策略
  */
-@Component
+@Single
 class MySqlDdlStrategy : DdlGenerationStrategy {
-    override val simpleTypeMappings: Map<String, (LsiField) -> String>
-        get() {
-            defaultSimpleTypeMappings.putAll(
-                mapOf(
-                    // Kotlin类型
-                    "Int" to { "INT" },
-                    "Long" to { "BIGINT" },
-                    "Short" to { "SMALLINT" },
-                    "Byte" to { "TINYINT" },
-                    "Float" to { "FLOAT" },
-                    "Double" to { "DOUBLE" },
-                    "String" to { field -> mapStringType(field) },
-                    "Char" to { "CHAR(1)" },
-                    "Boolean" to { "TINYINT(1)" },
-                    // Kotlin日期时间（kotlinx-datetime）
-                    "LocalDate" to { "DATE" },
-                    "LocalTime" to { "TIME" },
-                    "LocalDateTime" to { "DATETIME" },
-                    "Instant" to { "TIMESTAMP" }
-                ))
-            return defaultSimpleTypeMappings
-        }
 
+    private val dialect by lazy { DatabaseDialects.fromDatabaseName(DatabaseType.MYSQL.name.lowercase()) }
+    private val quote by lazy { dialect.quoteIdentifier() }
 
-    override fun supports(dialect: DatabaseType): Boolean {
-        return dialect == DatabaseType.MYSQL
+    override fun databaseType() = DatabaseType.MYSQL
+
+    override fun supports(): Boolean {
+        return Settings.databaseType == DatabaseType.MYSQL
     }
 
     override fun generateCreateTable(lsiClass: LsiClass): String {
@@ -59,32 +44,32 @@ class MySqlDdlStrategy : DdlGenerationStrategy {
         } ?: ""
 
         return """
-            |CREATE TABLE `$tableName` (
+            |CREATE TABLE $quote$tableName$quote (
             |  $columnsSql
             |)$autoIncrementOption;
             """.trimMargin()
     }
 
     override fun generateDropTable(tableName: String): String {
-        return "DROP TABLE IF EXISTS `$tableName`;"
+        return "DROP TABLE IF EXISTS $quote$tableName$quote;"
     }
 
     override fun generateAddColumn(tableName: String, field: LsiField): String {
         val columnDefinition = buildColumnDefinition(field)
-        return "ALTER TABLE `$tableName` ADD COLUMN $columnDefinition;"
+        return "ALTER TABLE $quote$tableName$quote ADD COLUMN $columnDefinition;"
     }
 
     override fun generateDropColumn(tableName: String, columnName: String): String {
-        return "ALTER TABLE `$tableName` DROP COLUMN `$columnName`;"
+        return "ALTER TABLE $quote$tableName$quote DROP COLUMN $quote$columnName$quote;"
     }
 
     override fun generateModifyColumn(tableName: String, field: LsiField): String {
         val columnDefinition = buildColumnDefinition(field)
-        return "ALTER TABLE `$tableName` MODIFY COLUMN $columnDefinition;"
+        return "ALTER TABLE $quote$tableName$quote MODIFY COLUMN $columnDefinition;"
     }
 
     override fun generateAddForeignKey(tableName: String, foreignKey: ForeignKeyInfo): String {
-        return "ALTER TABLE `$tableName` ADD CONSTRAINT `${foreignKey.name}` FOREIGN KEY (`${foreignKey.columnName}`) REFERENCES `${foreignKey.referencedTable}` (`${foreignKey.referencedColumn}`);"
+        return "ALTER TABLE $quote$tableName$quote ADD CONSTRAINT $quote${foreignKey.name}$quote FOREIGN KEY ($quote${foreignKey.columnName}$quote) REFERENCES $quote${foreignKey.referencedTableName}$quote ($quote${foreignKey.referencedColumnName}$quote);"
     }
 
     override fun generateAddComment(lsiClass: LsiClass): String {
@@ -93,53 +78,36 @@ class MySqlDdlStrategy : DdlGenerationStrategy {
 
         // 表注释
         if (lsiClass.comment != null) {
-            statements.add("ALTER TABLE `$tableName` COMMENT='${lsiClass.comment}';")
+            statements.add("ALTER TABLE $quote$tableName$quote COMMENT='${lsiClass.comment}';")
         }
 
         // 列注释
         lsiClass.getAllDbFields().filter { it.comment != null }.forEach { field ->
             val columnName = field.columnName ?: field.name ?: return@forEach
-            val columnType = mapFieldToColumnType(field)
-            statements.add("ALTER TABLE `$tableName` MODIFY `$columnName` $columnType COMMENT '${field.comment}';")
+            val columnType = field.getTypeString()
+            statements.add("ALTER TABLE $quote$tableName$quote MODIFY $quote$columnName$quote $columnType COMMENT '${field.comment}';")
         }
 
         return statements.joinToString("\n")
     }
 
-    override fun generateAll(lsiClasses: List<LsiClass>): String {
-        // MySQL支持在CREATE TABLE语句中定义外键，所以可以直接按顺序创建表
-        val createTableStatements = lsiClasses.map { lsiClass -> generateCreateTable(lsiClass) }
-        val addConstraintsStatements = lsiClasses.flatMap { lsiClass ->
-            val foreignKeyStatements = lsiClass.getDatabaseForeignKeys().map { fk ->
-                generateAddForeignKey(lsiClass.guessTableName, fk)
-            }
-            val commentStatements =
-                if (lsiClass.comment != null || lsiClass.getAllDbFields().any { it.comment != null }) {
-                    listOf(generateAddComment(lsiClass))
-                } else {
-                    emptyList()
-                }
-            foreignKeyStatements + commentStatements
-        }
-
-        return (createTableStatements + addConstraintsStatements).joinToString("\n\n")
-    }
-
     private fun buildColumnDefinition(field: LsiField): String {
+        val strategy = Settings.strategy
+
+
         val builder = StringBuilder()
         val columnName = field.columnName ?: field.name ?: "unknown"
+        // 使用方言适配器获取类型字符串
+        val columnTypeName = field.getDatabaseColumnType()
 
-        // 使用新的类型映射方法
-        val columnTypeName = mapFieldToColumnType(field)
-
-        builder.append("`$columnName` $columnTypeName")
+        builder.append("$quote$columnName$quote $columnTypeName")
 
         if (!field.isNullable) {
             builder.append(" NOT NULL")
         }
 
         if (field.isAutoIncrement) {
-            builder.append(" AUTO_INCREMENT")
+            builder.append(" ").append(dialect.getAutoIncrementSyntax())
         }
 
         if (field.defaultValue != null) {
@@ -152,13 +120,4 @@ class MySqlDdlStrategy : DdlGenerationStrategy {
 
         return builder.toString()
     }
-
-    /**
-     * 将字段类型映射到数据库列类型
-     */
-    private fun mapFieldToColumnType(field: LsiField): String {
-        val typeName = field.typeName ?: return "TEXT"
-        return simpleTypeMappings[typeName]?.invoke(field) ?: "TEXT"
-    }
-
 }

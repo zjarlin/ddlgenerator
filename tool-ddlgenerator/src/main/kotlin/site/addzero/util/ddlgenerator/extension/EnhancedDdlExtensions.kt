@@ -1,7 +1,7 @@
 package site.addzero.util.ddlgenerator.extension
 
-import site.addzero.util.db.DatabaseType
-import site.addzero.util.ddlgenerator.api.DdlGenerator
+import org.babyfish.jimmer.config.autoddl.Settings
+import site.addzero.util.ddlgenerator.config.strategy
 import site.addzero.util.lsi.clazz.LsiClass
 import site.addzero.util.lsi.clazz.guessTableName
 import site.addzero.util.lsi.database.scanManyToManyTables
@@ -19,39 +19,32 @@ import site.addzero.util.lsi_impl.impl.database.clazz.getIndexDefinitions
  * 5. 添加注释
  * 
  * @param dialect 数据库方言
- * @param includeIndexes 是否包含索引DDL
+ * @param autoddlKeys 是否包含索引DDL
  * @param includeManyToManyTables 是否包含多对多中间表DDL
- * @param includeForeignKeys 是否包含外键约束DDL
+ * @param autoddlForeignKeys 是否包含外键约束DDL
  */
-fun List<LsiClass>.toCompleteSchemaDDL(
-    dialect: DatabaseType,
-    includeIndexes: Boolean = true,
-    includeManyToManyTables: Boolean = true,
-    includeForeignKeys: Boolean = true
-): String {
-    val strategy = DdlGenerator.getStrategy(dialect)
+fun List<LsiClass>.toCompleteSchemaDDL( ): String {
+    val strategy = Settings.strategy
+    val autoddlAllowDeleteColumn = Settings.autoddlAllowDeleteColumn
+    val autoddlForeignKeys = Settings.autoddlForeignKeys
+    val autoddlKeys = Settings.autoddlKeys
     val statements = mutableListOf<String>()
-    
+
     // ===== 第一阶段：创建所有表（不含外键） =====
     statements.add("-- =============================================")
     statements.add("-- Phase 1: Create All Tables (without FK)")
     statements.add("-- =============================================")
     statements.add("")
-    
     // 1.1 创建实体表
     this.forEach { lsiClass ->
         statements.add("-- Table: ${lsiClass.name}")
         statements.add(strategy.generateCreateTable(lsiClass))
         statements.add("")
     }
-    
+
     // 1.2 创建多对多中间表
-    val manyToManyTables = if (includeManyToManyTables) {
-        this.scanManyToManyTables()
-    } else {
-        emptyList()
-    }
-    
+    val manyToManyTables = this.scanManyToManyTables()
+
     if (manyToManyTables.isNotEmpty()) {
         statements.add("-- Many-to-Many Junction Tables")
         manyToManyTables.forEach { table ->
@@ -60,14 +53,14 @@ fun List<LsiClass>.toCompleteSchemaDDL(
             statements.add("")
         }
     }
-    
+
     // ===== 第二阶段：创建索引 =====
-    if (includeIndexes) {
+    if (autoddlKeys) {
         statements.add("-- =============================================")
         statements.add("-- Phase 2: Create Indexes")
         statements.add("-- =============================================")
         statements.add("")
-        
+
         this.forEach { lsiClass ->
             val indexes = lsiClass.getIndexDefinitions()
             if (indexes.isNotEmpty()) {
@@ -79,14 +72,14 @@ fun List<LsiClass>.toCompleteSchemaDDL(
             }
         }
     }
-    
+
     // ===== 第三阶段：添加所有外键约束 =====
-    if (includeForeignKeys) {
+    if (autoddlForeignKeys) {
         statements.add("-- =============================================")
         statements.add("-- Phase 3: Add Foreign Key Constraints")
         statements.add("-- =============================================")
         statements.add("")
-        
+
         // 3.1 实体表的外键（从@JoinColumn等注解）
         this.forEach { lsiClass ->
             val foreignKeys = lsiClass.getDatabaseForeignKeys()
@@ -98,7 +91,7 @@ fun List<LsiClass>.toCompleteSchemaDDL(
                 statements.add("")
             }
         }
-        
+
         // 3.2 中间表的外键
         if (manyToManyTables.isNotEmpty()) {
             statements.add("-- Foreign Keys for Junction Tables")
@@ -111,47 +104,32 @@ fun List<LsiClass>.toCompleteSchemaDDL(
             }
         }
     }
-    
+
     // ===== 第四阶段：添加注释 =====
     statements.add("-- =============================================")
     statements.add("-- Phase 4: Add Comments")
     statements.add("-- =============================================")
     statements.add("")
-    
+
     this.forEach { lsiClass ->
         if (lsiClass.comment != null || lsiClass.fields.any { it.comment != null }) {
             statements.add(strategy.generateAddComment(lsiClass))
             statements.add("")
         }
     }
-    
-    return statements.joinToString("\n")
-}
 
-/**
- * 生成完整的Schema DDL（字符串方言）
- */
-fun List<LsiClass>.toCompleteSchemaDDL(
-    dialectName: String,
-    includeIndexes: Boolean = true,
-    includeManyToManyTables: Boolean = true,
-    includeForeignKeys: Boolean = true
-): String {
-    val dialect = DatabaseType.valueOf(dialectName.uppercase())
-    return toCompleteSchemaDDL(dialect, includeIndexes, includeManyToManyTables, includeForeignKeys)
+    return statements.joinToString("\n")
 }
 
 /**
  * 仅生成索引DDL
  */
-fun LsiClass.toIndexesDDL(dialect: DatabaseType): String {
-    val strategy = DdlGenerator.getStrategy(dialect)
+fun LsiClass.toUniqueKeysDDL(): String {
+    val strategy = Settings.strategy
     val indexes = this.getIndexDefinitions()
-    
     if (indexes.isEmpty()) {
         return "-- No indexes defined for ${this.name}"
     }
-    
     val tableName = this.guessTableName
     return indexes.joinToString("\n") { index ->
         strategy.generateCreateIndex(tableName, index)
@@ -161,16 +139,14 @@ fun LsiClass.toIndexesDDL(dialect: DatabaseType): String {
 /**
  * 仅生成多对多中间表DDL
  */
-fun List<LsiClass>.toManyToManyTablesDDL(dialect: DatabaseType): String {
-    val strategy = DdlGenerator.getStrategy(dialect)
+fun List<LsiClass>.toManyToManyTablesDDL(): String {
+    val strategy = Settings.strategy
     val tables = this.scanManyToManyTables()
-    
     if (tables.isEmpty()) {
         return "-- No many-to-many relationships found"
     }
-    
     return tables.joinToString("\n\n") { table ->
         "-- ${table.leftTableName} <-> ${table.rightTableName}\n" +
-        strategy.generateManyToManyTable(table)
+                strategy.generateManyToManyTable(table)
     }
 }

@@ -6,7 +6,6 @@ import site.addzero.util.db.DatabaseType
 import site.addzero.util.ddlgenerator.extension.*
 import site.addzero.util.lsi.anno.LsiAnnotation
 import site.addzero.util.lsi.clazz.LsiClass
-import site.addzero.util.lsi.field.LsiField
 
 /**
  * 增强功能测试
@@ -108,7 +107,7 @@ class EnhancedFeaturesTest {
         )
 
         // When: 生成索引DDL
-        val indexDdl = user.toIndexesDDL(DatabaseType.MYSQL)
+        val indexDdl = user.toUniqueKeysDDL(DatabaseType.MYSQL)
 
         // Then: 验证索引生成
         println("=== Indexes for User ===")

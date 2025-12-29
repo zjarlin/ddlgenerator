@@ -31,7 +31,7 @@ fun main() {
     // 2. 演示索引生成
     println("\n\n### 2. Index DDL ###\n")
     entities.forEach { entity ->
-        val indexDdl = entity.toIndexesDDL(DatabaseType.MYSQL)
+        val indexDdl = entity.toUniqueKeysDDL(DatabaseType.MYSQL)
         if (indexDdl.isNotBlank()) {
             println("-- Indexes for ${entity.name}")
             println(indexDdl)

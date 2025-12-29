@@ -1,43 +1,48 @@
 package site.addzero.util.ddlgenerator.assist
 
+import site.addzero.util.db.DatabaseType
 import site.addzero.util.lsi.field.LsiField
 import site.addzero.util.lsi_impl.impl.database.field.isText
 import site.addzero.util.lsi_impl.impl.database.field.length
+import java.sql.Types
 
 /**
- * String分为长文本
- * @param [field]
- * @return [String]
+ * 将字段转换为 JDBC 类型代码
+ *
+ * @param databaseType 数据库类型
+ * @return JDBC 类型代码 (java.sql.Types.*)
  */
-internal fun mapStringType(field: LsiField): String {
-    // 1. 检查是否为长文本
-    if (field.isText) {
-        val length = field.length
-        return when {
-            length > 16_777_215 -> "LONGTEXT"
-            length > 65_535 -> "MEDIUMTEXT"
-            else -> "TEXT"
+internal fun LsiField.toJdbcTypeCode(): Int {
+    return when (typeName) {
+        "String" -> {
+            // 字符串类型：根据长度决定
+            if (isText) {
+                // 长文本
+                when {
+                    length > 16_777_215 -> Types.LONGVARCHAR  // MEDIUMBLOB/LONGTEXT
+                    length > 65_535 -> Types.CLOB           // 64KB+
+                    else -> Types.LONGVARCHAR               // TEXT
+                }
+            } else {
+                // 普通 VARCHAR
+                Types.VARCHAR
+            }
         }
-    }
 
-    // 2. 普通字符串
-    val length = field.length
-    return when {
-        length > 0 -> "VARCHAR($length)"
-        else -> "VARCHAR(255)" // 默认长度
+        "Long", "java.lang.Long" -> Types.BIGINT
+        "Integer", "java.lang.Integer" -> Types.INTEGER
+        "Short", "java.lang.Short" -> Types.SMALLINT
+        "Byte", "java.lang.Byte" -> Types.TINYINT
+        "Float", "java.lang.Float" -> Types.REAL
+        "Double", "java.lang.Double" -> Types.DOUBLE
+        "BigDecimal", "java.math.BigDecimal" -> Types.DECIMAL
+        "Boolean", "java.lang.Boolean" -> Types.BOOLEAN
+        "java.util.Date", "java.sql.Date", "LocalDate" -> Types.DATE
+        "java.sql.Time", "LocalTime" -> Types.TIME
+        "java.sql.Timestamp", "LocalDateTime" -> Types.TIMESTAMP
+        "byte[]" -> Types.BLOB
+        "ByteBuffer", "java.nio.ByteBuffer" -> Types.BLOB
+        else -> Types.VARCHAR  // 默认
     }
 }
 
-
-/**
- * 默认映射
- */
-internal val defaultSimpleTypeMappings: MutableMap<String, (LsiField) -> String>
-    get() = mutableMapOf(
-        "String" to { field ->
-            mapStringType(field)
-        },
-        "Long" to { "BIGINT" },
-        "Short" to { "SMALLINT" },
-        "Short" to { "BIGINT" },
-    )
