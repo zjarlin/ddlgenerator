@@ -20,7 +20,6 @@ processorBuddy {
 //
 dependencies {
     implementation(project(":checkouts:lsi:lsi-core"))
-    implementation(project(":checkouts:lsi:lsi-database-core"))
     implementation("site.addzero:tool-database-model:2025.12.23")
     implementation("site.addzero:tool-jdbc:2025.12.24")
     implementation("site.addzero:tool-yml:2025.12.26")

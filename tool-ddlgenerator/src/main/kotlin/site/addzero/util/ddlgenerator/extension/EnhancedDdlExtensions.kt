@@ -4,6 +4,7 @@ import org.babyfish.jimmer.config.autoddl.Settings
 import site.addzero.util.ddlgenerator.config.strategy
 import site.addzero.util.lsi.clazz.LsiClass
 import site.addzero.util.lsi.clazz.guessTableName
+import site.addzero.util.lsi.database.dialect.DdlGenerationStrategy.generateCreateTable
 import site.addzero.util.lsi.database.scanManyToManyTables
 import site.addzero.util.lsi_impl.impl.database.clazz.getDatabaseForeignKeys
 import site.addzero.util.lsi_impl.impl.database.clazz.getIndexDefinitions
@@ -38,7 +39,7 @@ fun List<LsiClass>.toCompleteSchemaDDL( ): String {
     // 1.1 创建实体表
     this.forEach { lsiClass ->
         statements.add("-- Table: ${lsiClass.name}")
-        statements.add(strategy.generateCreateTable(lsiClass))
+        statements.add(lsiClass.generateCreateTable())
         statements.add("")
     }
 

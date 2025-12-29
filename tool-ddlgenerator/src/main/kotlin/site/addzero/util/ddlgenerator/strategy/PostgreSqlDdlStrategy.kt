@@ -1,7 +1,7 @@
 package site.addzero.util.ddlgenerator.strategy
 
 import org.babyfish.jimmer.config.autoddl.Settings
-import site.addzero.ioc.annotation.Component
+import org.koin.core.annotation.Single
 import site.addzero.util.db.DatabaseType
 import site.addzero.util.lsi.database.dialect.DdlGenerationStrategy
 import site.addzero.util.ddlgenerator.config.databaseType
@@ -93,9 +93,9 @@ class PostgreSqlDdlStrategy : DdlGenerationStrategy {
         return Settings.databaseType==DatabaseType.POSTGRESQL
     }
 
-    override fun generateCreateTable(lsiClass: LsiClass): String {
-        val tableName = lsiClass.guessTableName
-        val columns = lsiClass.getAllDbFields()
+    override fun LsiClass.generateCreateTable(): String {
+        val tableName = guessTableName
+        val columns = getAllDbFields()
 
         val columnsSql = columns.joinToString(",\n  ") { field ->
             buildColumnDefinition(field)
@@ -181,7 +181,7 @@ class PostgreSqlDdlStrategy : DdlGenerationStrategy {
         }
         
         // 2. 创建表
-        val createTableStatements = lsiClasses.map { lsiClass -> generateCreateTable(lsiClass) }
+        val createTableStatements = lsiClasses.map { lsiClass -> lsiClass.generateCreateTable() }
         statements.addAll(createTableStatements)
         
         // 3. 添加约束和注释

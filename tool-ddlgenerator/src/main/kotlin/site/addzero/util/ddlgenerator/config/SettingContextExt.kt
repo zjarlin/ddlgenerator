@@ -1,8 +1,8 @@
 package site.addzero.util.ddlgenerator.config
 
 import org.babyfish.jimmer.config.autoddl.SettingContext
-import site.addzero.ioc.registry.getSupportStrategty
 import site.addzero.util.DatabaseConfigReader
+import site.addzero.util.KoinInjector.getSupportStrategty
 import site.addzero.util.db.DatabaseType
 import site.addzero.util.lsi.database.dialect.DdlGenerationStrategy
 import site.addzero.util.ddlgenerator.assist.guessDabaseType
@@ -28,8 +28,6 @@ val SettingContext.strategy: DdlGenerationStrategy
     get() {
         val supportStrategty = getSupportStrategty<DdlGenerationStrategy> {
             it.support(databaseType)
-        } ?: throw IllegalArgumentException(
-            "not support yet: ${this.jdbcUrl}"
-        )
+        }
         return supportStrategty
     }

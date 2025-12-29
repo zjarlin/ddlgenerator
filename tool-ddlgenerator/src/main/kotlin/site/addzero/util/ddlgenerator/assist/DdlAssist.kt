@@ -1,6 +1,5 @@
 package site.addzero.util.ddlgenerator.assist
 
-import site.addzero.util.db.DatabaseType
 import site.addzero.util.lsi.field.LsiField
 import site.addzero.util.lsi_impl.impl.database.field.isText
 import site.addzero.util.lsi_impl.impl.database.field.length

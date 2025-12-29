@@ -1,11 +1,9 @@
 package site.addzero.util.ddlgenerator.strategy
 
 import org.babyfish.jimmer.config.autoddl.Settings
-import site.addzero.ioc.annotation.Component
+import org.koin.core.annotation.Single
 import site.addzero.util.db.DatabaseType
 import site.addzero.util.lsi.database.dialect.DdlGenerationStrategy
-import site.addzero.util.ddlgenerator.assist.getNativeTypeString
-import site.addzero.util.ddlgenerator.config.databaseType
 import site.addzero.util.ddlgenerator.config.strategy
 import site.addzero.util.lsi.clazz.LsiClass
 import site.addzero.util.lsi.clazz.guessTableName
@@ -21,22 +19,17 @@ import site.addzero.util.lsi_impl.impl.database.field.isPrimaryKey
  */
 @Single
 class MySqlDdlStrategy : DdlGenerationStrategy {
-
-    private val dialect by lazy { DatabaseDialects.fromDatabaseName(DatabaseType.MYSQL.name.lowercase()) }
-    private val quote by lazy { dialect.quoteIdentifier() }
-
-    override fun databaseType() = DatabaseType.MYSQL
-
-    override fun supports(): Boolean {
-        return Settings.databaseType == DatabaseType.MYSQL
+    override fun support(databaseType: DatabaseType): Boolean {
+        databaseType
     }
 
-    override fun generateCreateTable(lsiClass: LsiClass): String {
-        val tableName = lsiClass.guessTableName
-        val columns = lsiClass.getAllDbFields()
+
+    override fun LsiClass.generateCreateTable(): String {
+        val tableName = guessTableName
+        val columns = getAllDbFields()
 
         val columnsSql = columns.joinToString(",\n  ") { field ->
-            buildColumnDefinition(field)
+            field.buildColumnDefinition()
         }
         // 查找自增主键列以设置AUTO_INCREMENT选项
         val autoIncrementOption = columns.find { it.isAutoIncrement }?.let {
@@ -44,7 +37,7 @@ class MySqlDdlStrategy : DdlGenerationStrategy {
         } ?: ""
 
         return """
-            |CREATE TABLE $quote$tableName$quote (
+            |CREATE TABLE ${quote}$tableName${quote} (
             |  $columnsSql
             |)$autoIncrementOption;
             """.trimMargin()
@@ -55,7 +48,7 @@ class MySqlDdlStrategy : DdlGenerationStrategy {
     }
 
     override fun generateAddColumn(tableName: String, field: LsiField): String {
-        val columnDefinition = buildColumnDefinition(field)
+        val columnDefinition = field.buildColumnDefinition()
         return "ALTER TABLE $quote$tableName$quote ADD COLUMN $columnDefinition;"
     }
 
@@ -64,7 +57,7 @@ class MySqlDdlStrategy : DdlGenerationStrategy {
     }
 
     override fun generateModifyColumn(tableName: String, field: LsiField): String {
-        val columnDefinition = buildColumnDefinition(field)
+        val columnDefinition = field.buildColumnDefinition()
         return "ALTER TABLE $quote$tableName$quote MODIFY COLUMN $columnDefinition;"
     }
 
@@ -91,30 +84,29 @@ class MySqlDdlStrategy : DdlGenerationStrategy {
         return statements.joinToString("\n")
     }
 
-    private fun buildColumnDefinition(field: LsiField): String {
+    private fun LsiField.buildColumnDefinition(): String {
         val strategy = Settings.strategy
 
-
         val builder = StringBuilder()
-        val columnName = field.columnName ?: field.name ?: "unknown"
+        val columnName = columnName ?: name ?: "unknown"
         // 使用方言适配器获取类型字符串
-        val columnTypeName = field.getDatabaseColumnType()
+        val columnTypeName = this.getDatabaseColumnType()
 
-        builder.append("$quote$columnName$quote $columnTypeName")
+        builder.append("${quote}$columnName${quote} $columnTypeName")
 
-        if (!field.isNullable) {
+        if (!isNullable) {
             builder.append(" NOT NULL")
         }
 
-        if (field.isAutoIncrement) {
+        if (isAutoIncrement) {
             builder.append(" ").append(dialect.getAutoIncrementSyntax())
         }
 
-        if (field.defaultValue != null) {
-            builder.append(" DEFAULT ${field.defaultValue}")
+        if (defaultValue != null) {
+            builder.append(" DEFAULT ${defaultValue}")
         }
 
-        if (field.isPrimaryKey) {
+        if (isPrimaryKey) {
             builder.append(" PRIMARY KEY")
         }
 
