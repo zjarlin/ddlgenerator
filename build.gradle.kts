@@ -1,9 +1,10 @@
 //import org.babyfish.jimmer.config.autoddlConfigMap
 
 plugins {
-    id("site.addzero.gradle.plugin.kotlin-convention") version "+"
-    id("site.addzero.gradle.plugin.processorbuddy.processor-buddy") version "2025.12.31.1327"
-    id("site.addzero.gradle.plugin.koin-convention") version "2025.12.32"
+//    id("site.addzero.gradle.plugin.kotlin-convention") version "2025.12.20"
+    id("site.addzero.buildlogic.jvm.kotlin-convention")
+//    id("site.addzero.gradle.plugin.processorbuddy.processor-buddy") version "2025.12.31.1327"
+//    id("site.addzero.gradle.plugin.koin-convention") version "2025.12.32"
 }
 //processorBuddy {
 //    mustMap = autoddlConfigMap
