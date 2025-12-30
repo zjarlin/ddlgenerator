@@ -3,7 +3,7 @@
 plugins {
     id("site.addzero.gradle.plugin.kotlin-convention") version "+"
     id("site.addzero.gradle.plugin.processorbuddy.processor-buddy") version "2025.12.31.1327"
-//    id("site.addzero.gradle.plugin.koin-convention") version "2025.12.30"
+    id("site.addzero.gradle.plugin.koin-convention") version "2025.12.32"
 }
 //processorBuddy {
 //    mustMap = autoddlConfigMap
