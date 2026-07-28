@@ -31,7 +31,7 @@ class MySqlAutoDdlDialectTest {
         assertEquals(
             listOf(
                 """
-                CREATE TABLE `book` (
+                CREATE TABLE IF NOT EXISTS `book` (
                   `id` BIGINT AUTO_INCREMENT NOT NULL PRIMARY KEY,
                   `title` VARCHAR(128) NOT NULL
                 );
