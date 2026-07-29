@@ -13,6 +13,199 @@ import site.addzero.ddlgenerator.lsi.support.TestType
 class LsiAutoDdlSchemaAdapterTest {
 
     @Test
+    fun `expands Jimmer embeddable into leaf columns`() {
+        val cacle = TestClass(
+            simpleName = "CacleMixin",
+            qualifiedName = "demo.CacleMixin",
+            annotations = listOf(embeddable()),
+            isInterface = true,
+            fields = listOf(
+                "mom" to "mom",
+                "momElectric" to "mom_electric",
+                "momWater" to "mom_water",
+                "momBalance" to "mom_balance",
+                "yoy" to "yoy",
+                "yoyElectric" to "yoy_electric",
+                "yoyWater" to "yoy_water",
+                "yoyBalance" to "yoy_balance",
+            ).map { (propertyName, columnName) ->
+                TestField(
+                    name = propertyName,
+                    type = TestType("String"),
+                    typeName = "String",
+                    columnName = columnName,
+                    isNullable = true,
+                )
+            },
+        )
+        val thresholdConfig = TestClass(
+            simpleName = "IotThresholdConfigDO",
+            qualifiedName = "demo.IotThresholdConfigDO",
+            annotations = listOf(entity(), table("iot_threshold_config")),
+            fields = listOf(
+                TestField(
+                    name = "id",
+                    type = TestType("Long"),
+                    typeName = "Long",
+                    annotations = listOf(id()),
+                ),
+                TestField(
+                    name = "cacle",
+                    type = TestType("CacleMixin", qualifiedName = "demo.CacleMixin", lsiClass = cacle),
+                    typeName = "CacleMixin",
+                    fieldTypeClass = cacle,
+                ),
+            ),
+        )
+
+        val schema = LsiAutoDdlSchemaAdapter.from(listOf(thresholdConfig))
+        val columns = schema.table("iot_threshold_config")?.columns.orEmpty()
+
+        assertEquals(
+            setOf(
+                "id",
+                "mom",
+                "mom_electric",
+                "mom_water",
+                "mom_balance",
+                "yoy",
+                "yoy_electric",
+                "yoy_water",
+                "yoy_balance",
+            ),
+            columns.map { it.name }.toSet(),
+        )
+        assertTrue(columns.none { it.name == "cacle" })
+        assertTrue(columns.filterNot { it.name == "id" }.all { it.logicalType == AutoDdlLogicalType.STRING })
+    }
+
+    @Test
+    fun `recursively expands nullable Jimmer embeddable and applies prop override`() {
+        val comparisonValues = TestClass(
+            simpleName = "ComparisonValues",
+            qualifiedName = "demo.ComparisonValues",
+            annotations = listOf(embeddable()),
+            isInterface = true,
+            fields = listOf(
+                TestField(
+                    name = "electric",
+                    type = TestType("String"),
+                    typeName = "String",
+                    columnName = "electric_value",
+                ),
+                TestField(
+                    name = "water",
+                    type = TestType("String"),
+                    typeName = "String",
+                    columnName = "water_value",
+                ),
+            ),
+        )
+        val statistics = TestClass(
+            simpleName = "Statistics",
+            qualifiedName = "demo.Statistics",
+            annotations = listOf(embeddable()),
+            isInterface = true,
+            fields = listOf(
+                TestField(
+                    name = "values",
+                    type = TestType(
+                        "ComparisonValues",
+                        qualifiedName = "demo.ComparisonValues",
+                        lsiClass = comparisonValues,
+                    ),
+                    typeName = "ComparisonValues",
+                    fieldTypeClass = comparisonValues,
+                    isNullable = true,
+                ),
+            ),
+        )
+        val report = TestClass(
+            simpleName = "Report",
+            qualifiedName = "demo.Report",
+            annotations = listOf(entity()),
+            fields = listOf(
+                TestField(
+                    name = "id",
+                    type = TestType("Long"),
+                    typeName = "Long",
+                    annotations = listOf(id()),
+                ),
+                TestField(
+                    name = "statistics",
+                    type = TestType("Statistics", qualifiedName = "demo.Statistics", lsiClass = statistics),
+                    typeName = "Statistics",
+                    fieldTypeClass = statistics,
+                    annotations = listOf(
+                        propOverride("values.electric", "mom_electric"),
+                    ),
+                ),
+            ),
+        )
+
+        val schema = LsiAutoDdlSchemaAdapter.from(listOf(report))
+        val reportTable = schema.table("report")
+        assertNotNull(reportTable)
+
+        assertEquals(setOf("id", "mom_electric", "water_value"), reportTable.columns.map { it.name }.toSet())
+        assertEquals(true, reportTable.column("mom_electric")?.nullable)
+        assertEquals(true, reportTable.column("water_value")?.nullable)
+        assertTrue(reportTable.columns.none { it.name == "statistics" || it.name == "values" })
+    }
+
+    @Test
+    fun `keeps serialized embeddable child as json column`() {
+        val payload = TestClass(
+            simpleName = "Payload",
+            qualifiedName = "demo.Payload",
+            annotations = listOf(embeddable()),
+            isInterface = true,
+            fields = listOf(
+                TestField(
+                    name = "content",
+                    type = TestType("String"),
+                    typeName = "String",
+                ),
+            ),
+        )
+        val envelope = TestClass(
+            simpleName = "Envelope",
+            qualifiedName = "demo.Envelope",
+            annotations = listOf(embeddable()),
+            isInterface = true,
+            fields = listOf(
+                TestField(
+                    name = "payload",
+                    type = TestType("Payload", qualifiedName = "demo.Payload", lsiClass = payload),
+                    typeName = "Payload",
+                    fieldTypeClass = payload,
+                    annotations = listOf(serialized()),
+                    columnName = "payload_json",
+                ),
+            ),
+        )
+        val event = TestClass(
+            simpleName = "Event",
+            qualifiedName = "demo.Event",
+            annotations = listOf(entity()),
+            fields = listOf(
+                TestField(
+                    name = "envelope",
+                    type = TestType("Envelope", qualifiedName = "demo.Envelope", lsiClass = envelope),
+                    typeName = "Envelope",
+                    fieldTypeClass = envelope,
+                ),
+            ),
+        )
+
+        val schema = LsiAutoDdlSchemaAdapter.from(listOf(event))
+        val columns = schema.table("event")?.columns.orEmpty()
+
+        assertEquals(listOf("payload_json"), columns.map { it.name })
+        assertEquals(AutoDdlLogicalType.JSON, columns.single().logicalType)
+    }
+
+    @Test
     fun `reads bean validation size max as explicit string length`() {
         val document = TestClass(
             simpleName = "Document",
@@ -433,6 +626,25 @@ class LsiAutoDdlSchemaAdapterTest {
 
     private fun entity(): TestAnnotation {
         return TestAnnotation("org.babyfish.jimmer.sql.Entity", "Entity")
+    }
+
+    private fun embeddable(): TestAnnotation {
+        return TestAnnotation("org.babyfish.jimmer.sql.Embeddable", "Embeddable")
+    }
+
+    private fun propOverride(prop: String, columnName: String): TestAnnotation {
+        return TestAnnotation(
+            "org.babyfish.jimmer.sql.PropOverride",
+            "PropOverride",
+            mapOf(
+                "prop" to prop,
+                "columnName" to columnName,
+            ),
+        )
+    }
+
+    private fun serialized(): TestAnnotation {
+        return TestAnnotation("org.babyfish.jimmer.sql.Serialized", "Serialized")
     }
 
     private fun enumType(strategy: String): TestAnnotation {

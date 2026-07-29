@@ -43,6 +43,9 @@ object LsiAutoDdlSchemaAdapter {
         tableFields.forEach { field ->
             when {
                 field.shouldSkipField() -> Unit
+                field.isEmbeddableField() -> {
+                    scalarColumns += field.toEmbeddedColumns()
+                }
                 field.isOwningAssociation() -> {
                     val referencedClass = field.resolveAssociationTargetClass(owner, allEntities) ?: return@forEach
                     val referencedId = referencedClass.allFields().firstOrNull { it.isIdField() }
@@ -346,12 +349,14 @@ object LsiAutoDdlSchemaAdapter {
         }
     }
 
-    private fun LsiField.toColumn(): AutoDdlColumn {
-        val columnName = columnName ?: name.orEmpty()
+    private fun LsiField.toColumn(
+        resolvedColumnName: String = columnName ?: name.orEmpty(),
+        resolvedNullable: Boolean = isNullable,
+    ): AutoDdlColumn {
         return AutoDdlColumn(
-            name = columnName,
+            name = resolvedColumnName,
             logicalType = toLogicalType(),
-            nullable = isNullable,
+            nullable = resolvedNullable,
             length = length(),
             precision = precision(),
             scale = scale(),
@@ -362,6 +367,109 @@ object LsiAutoDdlSchemaAdapter {
             sequenceName = sequenceName(),
             nativeTypeHint = nativeTypeHint(),
         )
+    }
+
+    private fun LsiField.toEmbeddedColumns(): List<AutoDdlColumn> {
+        val embeddedClass = embeddableClass() ?: return listOf(toColumn())
+        return embeddedClass.toEmbeddedColumns(
+            ancestorNullable = isNullable,
+            propertyPath = "",
+            columnOverrides = propOverrides(),
+            visitingTypes = linkedSetOf(),
+        )
+    }
+
+    private fun LsiClass.toEmbeddedColumns(
+        ancestorNullable: Boolean,
+        propertyPath: String,
+        columnOverrides: Map<String, String>,
+        visitingTypes: MutableSet<String>,
+    ): List<AutoDdlColumn> {
+        val typeKey = qualifiedName ?: simpleName.orEmpty()
+        check(typeKey.isNotBlank() && visitingTypes.add(typeKey)) {
+            "Jimmer @Embeddable contains a recursive type path: $typeKey"
+        }
+        return try {
+            allFields().flatMap { field ->
+                field.toEmbeddedColumns(
+                    ancestorNullable = ancestorNullable,
+                    propertyPath = propertyPath,
+                    columnOverrides = columnOverrides,
+                    visitingTypes = visitingTypes,
+                )
+            }
+        } finally {
+            visitingTypes.remove(typeKey)
+        }
+    }
+
+    private fun LsiField.toEmbeddedColumns(
+        ancestorNullable: Boolean,
+        propertyPath: String,
+        columnOverrides: Map<String, String>,
+        visitingTypes: MutableSet<String>,
+    ): List<AutoDdlColumn> {
+        if (shouldSkipField()) {
+            return emptyList()
+        }
+        val fieldName = name.orEmpty()
+        val currentPath = listOf(propertyPath, fieldName)
+            .filter(String::isNotBlank)
+            .joinToString(".")
+        val nestedOverrides = prefixedPropOverrides(currentPath) + columnOverrides
+        val effectiveNullable = ancestorNullable || isNullable
+        val embeddedClass = embeddableClass().takeUnless { isSerializedScalar() }
+        if (embeddedClass != null) {
+            return embeddedClass.toEmbeddedColumns(
+                ancestorNullable = effectiveNullable,
+                propertyPath = currentPath,
+                columnOverrides = nestedOverrides,
+                visitingTypes = visitingTypes,
+            )
+        }
+        val resolvedColumnName = nestedOverrides[currentPath] ?: columnName ?: fieldName
+        return listOf(
+            toColumn(
+                resolvedColumnName = resolvedColumnName,
+                resolvedNullable = effectiveNullable,
+            )
+        )
+    }
+
+    private fun LsiField.isEmbeddableField(): Boolean {
+        return !isSerializedScalar() && embeddableClass() != null
+    }
+
+    private fun LsiField.embeddableClass(): LsiClass? {
+        return (fieldTypeClass ?: type?.lsiClass)
+            ?.takeIf { clazz -> clazz.isJimmerEmbeddable() }
+    }
+
+    private fun LsiClass.isJimmerEmbeddable(): Boolean {
+        return annotations.any { annotation ->
+            annotation.qualifiedName == JIMMER_EMBEDDABLE_ANNOTATION
+        }
+    }
+
+    private fun LsiField.prefixedPropOverrides(propertyPath: String): Map<String, String> {
+        return propOverrides().mapKeys { (prop, _) ->
+            listOf(propertyPath, prop)
+                .filter(String::isNotBlank)
+                .joinToString(".")
+        }
+    }
+
+    private fun LsiField.propOverrides(): Map<String, String> {
+        return annotations
+            .filter { annotation -> annotation.qualifiedName == JIMMER_PROP_OVERRIDE_ANNOTATION }
+            .mapNotNull { annotation ->
+                val prop = annotation.getAttribute("prop")?.toString()?.takeIf(String::isNotBlank)
+                    ?: return@mapNotNull null
+                val columnName = annotation.getAttribute("columnName")?.toString()?.takeIf(String::isNotBlank)
+                    ?: return@mapNotNull null
+                prop to columnName
+            }
+            .toMap()
     }
 
     private fun LsiField.toLogicalType(): AutoDdlLogicalType {
@@ -658,4 +766,7 @@ object LsiAutoDdlSchemaAdapter {
         "jakarta.persistence.Entity",
         "javax.persistence.Entity",
     )
+
+    private const val JIMMER_EMBEDDABLE_ANNOTATION = "org.babyfish.jimmer.sql.Embeddable"
+    private const val JIMMER_PROP_OVERRIDE_ANNOTATION = "org.babyfish.jimmer.sql.PropOverride"
 }
