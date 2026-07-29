@@ -48,6 +48,29 @@ class PostgreSqlAutoDdlDialectTest {
     }
 
     @Test
+    fun `normalizes postgresql default numeric facets before schema diff`() {
+        val dialect = PostgreSqlAutoDdlDialect()
+        val schema = AutoDdlSchema(
+            tables = listOf(
+                AutoDdlTable(
+                    name = "measurement",
+                    columns = listOf(
+                        AutoDdlColumn("value", AutoDdlLogicalType.DECIMAL),
+                        AutoDdlColumn("counter", AutoDdlLogicalType.BIG_INTEGER),
+                    ),
+                )
+            )
+        )
+
+        val normalized = dialect.normalizeSchema(schema)
+
+        assertEquals(19, normalized.table("measurement")?.column("value")?.precision)
+        assertEquals(2, normalized.table("measurement")?.column("value")?.scale)
+        assertEquals(65, normalized.table("measurement")?.column("counter")?.precision)
+        assertEquals(0, normalized.table("measurement")?.column("counter")?.scale)
+    }
+
+    @Test
     fun `renders string without explicit length as text`() {
         val dialect = PostgreSqlAutoDdlDialect()
         val statements = dialect.render(

@@ -14,10 +14,23 @@ class PostgreSqlAutoDdlDialect : AbstractSqlDialect(DatabaseType.POSTGRESQL) {
 
     override fun normalizeSchema(schema: AutoDdlSchema): AutoDdlSchema {
         return schema.mapColumns { column ->
-            if (column.logicalType == AutoDdlLogicalType.STRING && column.length == null) {
-                column.copy(logicalType = AutoDdlLogicalType.TEXT)
-            } else {
-                column
+            when (column.logicalType) {
+                AutoDdlLogicalType.STRING -> {
+                    if (column.length == null) column.copy(logicalType = AutoDdlLogicalType.TEXT) else column
+                }
+
+                AutoDdlLogicalType.CHAR -> column.copy(length = column.length ?: 1)
+                AutoDdlLogicalType.DECIMAL -> column.copy(
+                    precision = column.precision ?: 19,
+                    scale = column.scale ?: 2,
+                )
+
+                AutoDdlLogicalType.BIG_INTEGER -> column.copy(
+                    precision = column.precision ?: 65,
+                    scale = column.scale ?: 0,
+                )
+
+                else -> column
             }
         }
     }
