@@ -1,6 +1,6 @@
 # DDL Generator
 
-基于统一 Schema、差异规划和数据库方言的 AutoDDL 生成器，当前权威实现来自 OKM Platform。
+基于统一 Schema、差异规划和数据库方言的 DDL 生成器。
 
 包含模块：
 
