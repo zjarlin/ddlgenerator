@@ -52,6 +52,7 @@ object SchemaDiffPlanner {
                 return@forEach
             }
             operations += diffColumns(desiredTable, actualTable, options)
+            operations += diffPrimaryKey(desiredTable, actualTable, options)
             if (options.includeIndexes) {
                 operations += diffIndexes(desiredTable, actualTable, options)
             }
@@ -99,6 +100,33 @@ object SchemaDiffPlanner {
         }
 
         return operations
+    }
+
+    private fun diffPrimaryKey(
+        desiredTable: site.addzero.ddlgenerator.core.model.AutoDdlTable,
+        actualTable: site.addzero.ddlgenerator.core.model.AutoDdlTable,
+        options: AutoDdlDiffOptions,
+    ): List<AutoDdlOperation> {
+        val desiredColumns = normalizeNames(desiredTable.primaryKeyColumnNames)
+        val actualColumns = normalizeNames(actualTable.primaryKeyColumnNames)
+        if (desiredColumns == actualColumns) {
+            return emptyList()
+        }
+        if (actualColumns.isEmpty()) {
+            return desiredTable.primaryKeyColumnNames
+                .takeIf(List<String>::isNotEmpty)
+                ?.let { columnNames -> listOf(AddPrimaryKey(desiredTable.name, columnNames)) }
+                .orEmpty()
+        }
+        if (!options.allowDestructiveChanges) {
+            return emptyList()
+        }
+        return buildList {
+            add(DropPrimaryKey(desiredTable.name))
+            if (desiredColumns.isNotEmpty()) {
+                add(AddPrimaryKey(desiredTable.name, desiredTable.primaryKeyColumnNames))
+            }
+        }
     }
 
     private fun diffIndexes(
@@ -264,6 +292,7 @@ object SchemaDiffPlanner {
         return when (operation) {
             is DropForeignKey -> 10
             is DropIndex -> 20
+            is DropPrimaryKey -> 25
             is DropColumn -> 30
             is DropTable -> 40
             is CreateSequence -> 50
@@ -273,6 +302,7 @@ object SchemaDiffPlanner {
             is DropColumnNotNull -> 85
             is SetColumnNotNull -> 86
             is RenameTable -> 87
+            is AddPrimaryKey -> 88
             is CreateIndex -> 90
             is AddForeignKey -> 100
             is AddComment -> 110
@@ -290,6 +320,8 @@ object SchemaDiffPlanner {
             is DropColumnNotNull -> "${operation.tableName}.${operation.columnName}"
             is SetColumnNotNull -> "${operation.tableName}.${operation.column.name}"
             is DropColumn -> "${operation.tableName}.${operation.columnName}"
+            is AddPrimaryKey -> "${operation.tableName}.${operation.columnNames.joinToString(",")}"
+            is DropPrimaryKey -> operation.tableName
             is CreateIndex -> "${operation.tableName}.${operation.index.name}"
             is DropIndex -> "${operation.tableName}.${operation.indexName}"
             is AddForeignKey -> "${operation.tableName}.${operation.foreignKey.name}"

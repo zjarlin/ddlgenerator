@@ -488,6 +488,52 @@ class LsiAutoDdlSchemaAdapterTest {
         assertTrue(junction.foreignKeys.any { it.referencedTableName == "role" })
     }
 
+    @Test
+    fun `adds join table filter column to junction primary key`() {
+        val dept = TestClass(
+            simpleName = "Dept",
+            qualifiedName = "demo.Dept",
+            annotations = listOf(entity()),
+            fields = listOf(TestField(name = "id", type = TestType("Long"), typeName = "Long", annotations = listOf(id())))
+        )
+        val notice = TestClass(
+            simpleName = "Notice",
+            qualifiedName = "demo.Notice",
+            annotations = listOf(entity()),
+            fields = listOf(
+                TestField(name = "id", type = TestType("Long"), typeName = "Long", annotations = listOf(id())),
+                TestField(
+                    name = "depts",
+                    type = TestType(
+                        simpleName = "List",
+                        qualifiedName = "kotlin.collections.List",
+                        isCollectionType = true,
+                        typeParameters = listOf(TestType("Dept", qualifiedName = "demo.Dept", lsiClass = dept))
+                    ),
+                    typeName = "List",
+                    isCollectionType = true,
+                    annotations = listOf(
+                        manyToMany(),
+                        joinTable(
+                            name = "biz_mapping",
+                            joinColumnName = "from_id",
+                            inverseJoinColumnName = "to_id",
+                            filterColumnName = "mapping_type",
+                        )
+                    )
+                )
+            )
+        )
+
+        val junction = LsiAutoDdlSchemaAdapter.scanManyToManyTables(listOf(notice, dept)).single()
+
+        assertEquals(listOf("from_id", "to_id", "mapping_type"), junction.columns.map { it.name })
+        assertEquals(AutoDdlLogicalType.STRING, junction.column("mapping_type")?.logicalType)
+        assertEquals(null, junction.column("mapping_type")?.length)
+        assertEquals(false, junction.column("mapping_type")?.nullable)
+        assertEquals(true, junction.column("mapping_type")?.primaryKey)
+    }
+
 
     @Test
     fun `default many to many table name keeps DO suffix like Jimmer runtime`() {
@@ -745,15 +791,29 @@ class LsiAutoDdlSchemaAdapterTest {
         name: String,
         joinColumnName: String,
         inverseJoinColumnName: String,
+        filterColumnName: String? = null,
     ): TestAnnotation {
         return TestAnnotation(
             "org.babyfish.jimmer.sql.JoinTable",
             "JoinTable",
-            mapOf(
-                "name" to name,
-                "joinColumnName" to joinColumnName,
-                "inverseJoinColumnName" to inverseJoinColumnName,
-            )
+            buildMap {
+                put("name", name)
+                put("joinColumnName", joinColumnName)
+                put("inverseJoinColumnName", inverseJoinColumnName)
+                filterColumnName?.let { columnName ->
+                    put(
+                        "filter",
+                        TestAnnotation(
+                            "org.babyfish.jimmer.sql.JoinTable.JoinTableFilter",
+                            "JoinTableFilter",
+                            mapOf(
+                                "columnName" to columnName,
+                                "values" to listOf("notice_dept"),
+                            ),
+                        )
+                    )
+                }
+            }
         )
     }
 }

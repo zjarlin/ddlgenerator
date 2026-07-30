@@ -3,6 +3,7 @@ package site.addzero.ddlgenerator.core.dialect
 import site.addzero.ddlgenerator.core.diff.AddColumn
 import site.addzero.ddlgenerator.core.diff.AddComment
 import site.addzero.ddlgenerator.core.diff.AddForeignKey
+import site.addzero.ddlgenerator.core.diff.AddPrimaryKey
 import site.addzero.ddlgenerator.core.diff.AlterColumn
 import site.addzero.ddlgenerator.core.diff.AutoDdlOperation
 import site.addzero.ddlgenerator.core.diff.CreateIndex
@@ -12,6 +13,7 @@ import site.addzero.ddlgenerator.core.diff.DropColumn
 import site.addzero.ddlgenerator.core.diff.DropColumnNotNull
 import site.addzero.ddlgenerator.core.diff.DropForeignKey
 import site.addzero.ddlgenerator.core.diff.DropIndex
+import site.addzero.ddlgenerator.core.diff.DropPrimaryKey
 import site.addzero.ddlgenerator.core.diff.DropTable
 import site.addzero.ddlgenerator.core.diff.RenameTable
 import site.addzero.ddlgenerator.core.diff.SetColumnNotNull
@@ -102,6 +104,8 @@ abstract class AbstractSqlDialect(
             is DropColumnNotNull -> renderDropColumnNotNull(operation.tableName, operation.columnName).map { withTerminator(it, context) }
             is SetColumnNotNull -> renderSetColumnNotNull(operation.tableName, operation.column).map { withTerminator(it, context) }
             is DropColumn -> listOf(withTerminator(renderDropColumn(operation.tableName, operation.columnName), context))
+            is AddPrimaryKey -> renderAddPrimaryKey(operation.tableName, operation.columnNames).map { withTerminator(it, context) }
+            is DropPrimaryKey -> renderDropPrimaryKey(operation.tableName).map { withTerminator(it, context) }
             is CreateIndex -> listOf(withTerminator(renderCreateIndex(operation.tableName, operation.index), context))
             is DropIndex -> listOf(withTerminator(renderDropIndex(operation.tableName, operation.indexName), context))
             is AddForeignKey -> renderAddForeignKey(operation.tableName, operation.foreignKey).map { withTerminator(it, context) }
@@ -176,6 +180,15 @@ abstract class AbstractSqlDialect(
 
     protected open fun renderDropColumn(tableName: String, columnName: String): String {
         return "ALTER TABLE ${quoteIdentifier(tableName)} DROP COLUMN IF EXISTS ${quoteIdentifier(columnName)}"
+    }
+
+    protected open fun renderAddPrimaryKey(tableName: String, columnNames: List<String>): List<String> {
+        val columns = columnNames.joinToString(", ") { columnName -> quoteIdentifier(columnName) }
+        return listOf("ALTER TABLE ${quoteIdentifier(tableName)} ADD PRIMARY KEY ($columns)")
+    }
+
+    protected open fun renderDropPrimaryKey(tableName: String): List<String> {
+        return listOf("ALTER TABLE ${quoteIdentifier(tableName)} DROP PRIMARY KEY")
     }
 
     protected open fun renderCreateIndex(tableName: String, index: site.addzero.ddlgenerator.core.model.AutoDdlIndex): String {

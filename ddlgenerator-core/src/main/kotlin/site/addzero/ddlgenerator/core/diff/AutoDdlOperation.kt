@@ -59,6 +59,15 @@ data class DropColumn(
     val columnName: String,
 ) : AutoDdlOperation
 
+data class AddPrimaryKey(
+    override val tableName: String,
+    val columnNames: List<String>,
+) : AutoDdlOperation
+
+data class DropPrimaryKey(
+    override val tableName: String,
+) : AutoDdlOperation
+
 data class CreateIndex(
     override val tableName: String,
     val index: AutoDdlIndex,

@@ -77,7 +77,7 @@ class PostgreSqlAutoDdlDialect : AbstractSqlDialect(DatabaseType.POSTGRESQL) {
     override fun renderAddColumn(tableName: String, column: AutoDdlColumn): List<String> {
         val table = quoteIdentifier(tableName)
         val columnName = quoteIdentifier(column.name)
-        if (column.nullable || column.primaryKey || column.autoIncrement) {
+        if (column.nullable || column.autoIncrement) {
             return listOf("ALTER TABLE $table ADD COLUMN IF NOT EXISTS ${renderColumnDefinition(column)}")
         }
 
@@ -104,6 +104,47 @@ class PostgreSqlAutoDdlDialect : AbstractSqlDialect(DatabaseType.POSTGRESQL) {
               IF to_regclass('${oldTableName.escapeSqlLiteral()}') IS NOT NULL
                  AND to_regclass('${newTableName.escapeSqlLiteral()}') IS NULL THEN
                 ALTER TABLE $oldTable RENAME TO $newTable;
+              END IF;
+            END ${'$'}${'$'}
+            """.trimIndent()
+        )
+    }
+
+    override fun renderAddPrimaryKey(tableName: String, columnNames: List<String>): List<String> {
+        val table = quoteIdentifier(tableName)
+        val columns = columnNames.joinToString(", ") { columnName -> quoteIdentifier(columnName) }
+        return listOf(
+            """
+            DO ${'$'}${'$'}
+            BEGIN
+              IF to_regclass('${tableName.escapeSqlLiteral()}') IS NOT NULL
+                 AND NOT EXISTS (
+                   SELECT 1
+                   FROM pg_constraint
+                   WHERE conrelid = to_regclass('${tableName.escapeSqlLiteral()}')
+                     AND contype = 'p'
+                 ) THEN
+                ALTER TABLE $table ADD PRIMARY KEY ($columns);
+              END IF;
+            END ${'$'}${'$'}
+            """.trimIndent()
+        )
+    }
+
+    override fun renderDropPrimaryKey(tableName: String): List<String> {
+        return listOf(
+            """
+            DO ${'$'}${'$'}
+            DECLARE
+              primary_key_name TEXT;
+            BEGIN
+              SELECT conname
+              INTO primary_key_name
+              FROM pg_constraint
+              WHERE conrelid = to_regclass('${tableName.escapeSqlLiteral()}')
+                AND contype = 'p';
+              IF primary_key_name IS NOT NULL THEN
+                EXECUTE format('ALTER TABLE %I DROP CONSTRAINT %I', '${tableName.escapeSqlLiteral()}', primary_key_name);
               END IF;
             END ${'$'}${'$'}
             """.trimIndent()

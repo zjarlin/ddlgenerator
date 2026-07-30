@@ -3,6 +3,7 @@ package site.addzero.ddlgenerator.dialect.postgresql
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import site.addzero.ddlgenerator.core.diff.AddColumn
+import site.addzero.ddlgenerator.core.diff.AddPrimaryKey
 import site.addzero.ddlgenerator.core.diff.AlterColumn
 import site.addzero.ddlgenerator.core.diff.CreateIndex
 import site.addzero.ddlgenerator.core.diff.CreateTable
@@ -175,6 +176,52 @@ class PostgreSqlAutoDdlDialectTest {
                 """ALTER TABLE "book" ALTER COLUMN "title" DROP DEFAULT;""",
             ),
             statements
+        )
+    }
+
+    @Test
+    fun `renders unbounded primary key text column backfill before idempotent primary key creation`() {
+        val dialect = PostgreSqlAutoDdlDialect()
+        val statements = dialect.render(
+            listOf(
+                AddColumn(
+                    tableName = "biz_mapping",
+                    column = AutoDdlColumn(
+                        "mapping_type",
+                        AutoDdlLogicalType.STRING,
+                        nullable = false,
+                        primaryKey = true,
+                    )
+                ),
+                AddPrimaryKey(
+                    tableName = "biz_mapping",
+                    columnNames = listOf("from_id", "to_id", "mapping_type"),
+                )
+            )
+        )
+
+        assertEquals(
+            listOf(
+                """ALTER TABLE "biz_mapping" ADD COLUMN IF NOT EXISTS "mapping_type" TEXT DEFAULT '';""",
+                """UPDATE "biz_mapping" SET "mapping_type" = '' WHERE "mapping_type" IS NULL;""",
+                """ALTER TABLE "biz_mapping" ALTER COLUMN "mapping_type" SET NOT NULL;""",
+                """ALTER TABLE "biz_mapping" ALTER COLUMN "mapping_type" DROP DEFAULT;""",
+                """
+                DO ${'$'}${'$'}
+                BEGIN
+                  IF to_regclass('biz_mapping') IS NOT NULL
+                     AND NOT EXISTS (
+                       SELECT 1
+                       FROM pg_constraint
+                       WHERE conrelid = to_regclass('biz_mapping')
+                         AND contype = 'p'
+                     ) THEN
+                    ALTER TABLE "biz_mapping" ADD PRIMARY KEY ("from_id", "to_id", "mapping_type");
+                  END IF;
+                END ${'$'}${'$'};
+                """.trimIndent(),
+            ),
+            statements,
         )
     }
 

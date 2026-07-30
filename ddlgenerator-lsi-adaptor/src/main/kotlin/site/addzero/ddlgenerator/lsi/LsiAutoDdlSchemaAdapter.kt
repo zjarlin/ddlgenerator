@@ -717,43 +717,38 @@ object LsiAutoDdlSchemaAdapter {
         val joinTableAnno = annotation("JoinTable") ?: return emptyList()
         val filterValue = joinTableAnno.getAttribute("filter") ?: return emptyList()
         return extractFilterColumnNames(filterValue).map { columnName ->
-            AutoDdlColumn(columnName, AutoDdlLogicalType.STRING, nullable = false, primaryKey = true)
+            AutoDdlColumn(
+                name = columnName,
+                logicalType = AutoDdlLogicalType.STRING,
+                nullable = false,
+                primaryKey = true,
+            )
         }.distinctBy { it.name.lowercase() }
     }
 
-    /**
-     * 从 JoinTableFilter 嵌套注解对象中提取 columnName。
-     * filterValue 在 KSP 实现中是 KSAnnotation，通过反射读取其 arguments。
-     */
+    /** 从 JoinTableFilter 嵌套注解中提取 columnName。 */
     private fun extractFilterColumnNames(filterValue: Any): List<String> {
-        return try {
-            val argumentsMethod = filterValue::class.java.methods
-                .firstOrNull { it.name == "getArguments" }
-            @Suppress("UNCHECKED_CAST")
-            val arguments = argumentsMethod?.invoke(filterValue) as? List<*> ?: return emptyList()
-            arguments.mapNotNull { arg ->
-                try {
-                    val nameMethod = arg?.javaClass?.methods?.firstOrNull { it.name == "getName" }
-                    val valueMethod = arg?.javaClass?.methods?.firstOrNull { it.name == "getValue" }
-                    // KSName.asString() 返回 String
-                    val nameObj = nameMethod?.invoke(arg)
-                    val name = when (nameObj) {
-                        is String -> nameObj
-                        else -> nameObj?.javaClass?.methods
-                            ?.firstOrNull { it.name == "asString" }
-                            ?.invoke(nameObj)?.toString()
-                    }
-                    if (name == "columnName") {
-                        valueMethod?.invoke(arg)?.toString()
-                    } else {
-                        null
-                    }
-                } catch (_: Exception) {
-                    null
+        return when (filterValue) {
+            is LsiAnnotation -> {
+                val values = filterValue.getAttribute("values")
+                val hasValues = when (values) {
+                    is Collection<*> -> values.isNotEmpty()
+                    is Array<*> -> values.isNotEmpty()
+                    else -> !values?.toString().isNullOrBlank()
+                }
+                if (hasValues) {
+                    listOfNotNull(
+                        filterValue.getAttribute("columnName")
+                            ?.toString()
+                            ?.takeIf(String::isNotBlank)
+                    )
+                } else {
+                    emptyList()
                 }
             }
-        } catch (_: Exception) {
-            emptyList()
+            is Collection<*> -> filterValue.filterNotNull().flatMap(::extractFilterColumnNames)
+            is Array<*> -> filterValue.filterNotNull().flatMap(::extractFilterColumnNames)
+            else -> emptyList()
         }
     }
 
