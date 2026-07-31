@@ -571,6 +571,41 @@ class LsiAutoDdlSchemaAdapterTest {
     }
 
     @Test
+    fun `default many to many table name uses target entity instead of property name`() {
+        val device = TestClass(
+            simpleName = "Device",
+            qualifiedName = "demo.Device",
+            annotations = listOf(entity()),
+            fields = listOf(TestField(name = "id", type = TestType("Long"), typeName = "Long", annotations = listOf(id())))
+        )
+        val rulePlan = TestClass(
+            simpleName = "RulePlan",
+            qualifiedName = "demo.RulePlan",
+            annotations = listOf(entity()),
+            fields = listOf(
+                TestField(name = "id", type = TestType("Long"), typeName = "Long", annotations = listOf(id())),
+                TestField(
+                    name = "topologyDevices",
+                    type = TestType(
+                        simpleName = "List",
+                        qualifiedName = "kotlin.collections.List",
+                        isCollectionType = true,
+                        typeParameters = listOf(TestType("Device", qualifiedName = "demo.Device", lsiClass = device))
+                    ),
+                    typeName = "List",
+                    isCollectionType = true,
+                    annotations = listOf(manyToMany())
+                )
+            )
+        )
+
+        val junction = LsiAutoDdlSchemaAdapter.scanManyToManyTables(listOf(rulePlan, device)).single()
+
+        assertEquals("rule_plan_device_mapping", junction.name)
+        assertEquals(listOf("rule_plan_id", "device_id"), junction.columns.map { it.name })
+    }
+
+    @Test
     fun `scans inherited owning many to many when target entity comes from dependency module`() {
         val user = TestClass(
             simpleName = "User",
@@ -620,7 +655,7 @@ class LsiAutoDdlSchemaAdapterTest {
         assertEquals(1, baseSchema.tables.size)
         assertEquals("ai_power_device", baseSchema.tables.single().name)
         val junction = junctionTables.single()
-        assertEquals("equipment_information_archive_person_in_charge_mapping", junction.name)
+        assertEquals("equipment_information_archive_user_mapping", junction.name)
         assertEquals(listOf("equipment_information_archive_id", "user_id"), junction.columns.map { it.name })
         assertTrue(junction.foreignKeys.any { it.referencedTableName == "ai_power_device" })
         assertTrue(junction.foreignKeys.any { it.referencedTableName == "system_users" })
@@ -668,6 +703,62 @@ class LsiAutoDdlSchemaAdapterTest {
         assertEquals(listOf("user_id", "dept_id"), junction.columns.map { it.name })
         assertTrue(junction.foreignKeys.any { it.referencedTableName == "system_users" })
         assertTrue(junction.foreignKeys.any { it.referencedTableName == "system_dept" })
+    }
+
+    @Test
+    fun `mapped by many to many reuses explicit join table from owning property`() {
+        val user = TestClass(
+            simpleName = "User",
+            qualifiedName = "demo.User",
+            annotations = listOf(entity()),
+            fields = listOf(
+                TestField(name = "id", type = TestType("Long"), typeName = "Long", annotations = listOf(id())),
+                TestField(
+                    name = "categories",
+                    type = TestType(
+                        simpleName = "List",
+                        qualifiedName = "kotlin.collections.List",
+                        isCollectionType = true,
+                        typeParameters = listOf(TestType("Category", qualifiedName = "demo.Category"))
+                    ),
+                    typeName = "List",
+                    isCollectionType = true,
+                    annotations = listOf(
+                        manyToMany(),
+                        joinTable(
+                            name = "user_category_mapping",
+                            joinColumnName = "user_id",
+                            inverseJoinColumnName = "category_id",
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val category = TestClass(
+            simpleName = "Category",
+            qualifiedName = "demo.Category",
+            annotations = listOf(entity()),
+            fields = listOf(
+                TestField(name = "id", type = TestType("Long"), typeName = "Long", annotations = listOf(id())),
+                TestField(
+                    name = "users",
+                    type = TestType(
+                        simpleName = "List",
+                        qualifiedName = "kotlin.collections.List",
+                        isCollectionType = true,
+                        typeParameters = listOf(TestType("User", qualifiedName = "demo.User", lsiClass = user))
+                    ),
+                    typeName = "List",
+                    isCollectionType = true,
+                    annotations = listOf(manyToMany(mappedBy = "categories")),
+                ),
+            ),
+        )
+
+        val junctionTables = LsiAutoDdlSchemaAdapter.scanManyToManyTables(listOf(user, category))
+
+        assertEquals(listOf("user_category_mapping"), junctionTables.map { table -> table.name })
+        assertEquals(listOf("user_id", "category_id"), junctionTables.single().columns.map { column -> column.name })
     }
 
     private fun entity(): TestAnnotation {

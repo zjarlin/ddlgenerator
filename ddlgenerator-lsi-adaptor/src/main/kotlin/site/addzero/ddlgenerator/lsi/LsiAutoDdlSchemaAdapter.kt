@@ -176,18 +176,22 @@ object LsiAutoDdlSchemaAdapter {
                         ?.takeIf { it.isNotBlank() }
                     val ownerEntity = if (mappedBy == null) leftEntity else rightEntity
                     val inverseEntity = if (mappedBy == null) rightEntity else leftEntity
-                    val relationName = mappedBy ?: field.name.orEmpty()
-                    val tableName = field.annotationValue("JoinTable", "name")
+                    val owningField = if (mappedBy == null) {
+                        field
+                    } else {
+                        ownerEntity.allFields().firstOrNull { ownerField -> ownerField.name == mappedBy } ?: field
+                    }
+                    val tableName = owningField.annotationValue("JoinTable", "name")
                         ?.takeIf { it.isNotBlank() }
-                        ?: "${ownerEntity.jimmerAssociationToken()}_${relationName.toJimmerAssociationToken()}_mapping"
-                    val leftColumnName = field.annotationValue("JoinTable", "joinColumnName")
+                        ?: "${ownerEntity.jimmerAssociationToken()}_${inverseEntity.jimmerAssociationToken()}_mapping"
+                    val leftColumnName = owningField.annotationValue("JoinTable", "joinColumnName")
                         ?.takeIf { it.isNotBlank() }
                         ?: "${ownerEntity.jimmerAssociationToken()}_id"
-                    val rightColumnName = field.annotationValue("JoinTable", "inverseJoinColumnName")
+                    val rightColumnName = owningField.annotationValue("JoinTable", "inverseJoinColumnName")
                         ?.takeIf { it.isNotBlank() }
                         ?: "${inverseEntity.jimmerAssociationToken()}_id"
 
-                    val filterColumns = field.readJoinTableFilterColumns()
+                    val filterColumns = owningField.readJoinTableFilterColumns()
                     val table = AutoDdlTable(
                         name = tableName,
                         columns = listOf(
@@ -231,15 +235,6 @@ object LsiAutoDdlSchemaAdapter {
         val name = simpleName.orEmpty()
             .removeSuffix("Entity")
         return name.toJimmerSnakeCase()
-    }
-
-    private fun String.toJimmerAssociationToken(): String {
-        val snakeName = toJimmerSnakeCase()
-        return when {
-            snakeName.endsWith("ies") -> snakeName.dropLast(3) + "y"
-            snakeName.endsWith("s") && !snakeName.endsWith("ss") -> snakeName.dropLast(1)
-            else -> snakeName
-        }
     }
 
     private fun String.toJimmerSnakeCase(): String {
