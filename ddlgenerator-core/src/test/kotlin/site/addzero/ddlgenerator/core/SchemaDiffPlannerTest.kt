@@ -272,4 +272,32 @@ class SchemaDiffPlannerTest {
 
         assertEquals(listOf(DropPrimaryKey::class, AddPrimaryKey::class), operations.map { it::class })
     }
+
+    @Test
+    fun `ignores composite primary key order when database metadata only marks key columns`() {
+        val desired = AutoDdlSchema(
+            tables = listOf(
+                AutoDdlTable(
+                    name = "device_category_mapping",
+                    columns = listOf(
+                        AutoDdlColumn("category_id", AutoDdlLogicalType.INT64, nullable = false, primaryKey = true),
+                        AutoDdlColumn("device_id", AutoDdlLogicalType.INT64, nullable = false, primaryKey = true),
+                    ),
+                )
+            )
+        )
+        val actual = desired.copy(
+            tables = listOf(
+                desired.tables.single().copy(columns = desired.tables.single().columns.reversed())
+            )
+        )
+
+        val operations = SchemaDiffPlanner.plan(
+            desired,
+            actual,
+            AutoDdlDiffOptions(allowDestructiveChanges = true),
+        )
+
+        assertFalse(operations.any { it is DropPrimaryKey || it is AddPrimaryKey })
+    }
 }

@@ -449,6 +449,61 @@ class LsiAutoDdlSchemaAdapterTest {
     }
 
     @Test
+    fun `keeps mapped superclass fields in joined subtype physical table`() {
+        val baseNode = TestClass(
+            simpleName = "BaseNode",
+            qualifiedName = "demo.BaseNode",
+            annotations = listOf(entity(), table("iot_base_node"), inheritance("JOINED")),
+            fields = listOf(
+                TestField(
+                    name = "id",
+                    type = TestType("Long"),
+                    typeName = "Long",
+                    annotations = listOf(id()),
+                ),
+                TestField(
+                    name = "name",
+                    type = TestType("String"),
+                    typeName = "String",
+                ),
+            ),
+        )
+        val lifecycle = TestClass(
+            simpleName = "DeviceLifecycle",
+            qualifiedName = "demo.DeviceLifecycle",
+            annotations = listOf(mappedSuperclass()),
+            fields = listOf(
+                TestField(
+                    name = "onlineTime",
+                    type = TestType("LocalDateTime"),
+                    typeName = "LocalDateTime",
+                    columnName = "online_time",
+                    isNullable = true,
+                ),
+            ),
+        )
+        val device = TestClass(
+            simpleName = "Device",
+            qualifiedName = "demo.Device",
+            annotations = listOf(entity(), table("iot_device")),
+            interfaces = listOf(baseNode, lifecycle),
+            fields = baseNode.fields + lifecycle.fields + TestField(
+                name = "deviceKey",
+                type = TestType("String"),
+                typeName = "String",
+                columnName = "device_key",
+                isNullable = true,
+            ),
+        )
+
+        val schema = LsiAutoDdlSchemaAdapter.from(listOf(baseNode, device))
+
+        val deviceTable = schema.table("iot_device")
+        assertNotNull(deviceTable)
+        assertEquals(setOf("id", "online_time", "device_key"), deviceTable.columns.map { it.name }.toSet())
+    }
+
+    @Test
     fun `scans owning many to many into pure junction table`() {
         val role = TestClass(
             simpleName = "Role",

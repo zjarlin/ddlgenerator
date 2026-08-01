@@ -107,8 +107,8 @@ object SchemaDiffPlanner {
         actualTable: site.addzero.ddlgenerator.core.model.AutoDdlTable,
         options: AutoDdlDiffOptions,
     ): List<AutoDdlOperation> {
-        val desiredColumns = normalizeNames(desiredTable.primaryKeyColumnNames)
-        val actualColumns = normalizeNames(actualTable.primaryKeyColumnNames)
+        val desiredColumns = normalizeNames(desiredTable.primaryKeyColumnNames).toSet()
+        val actualColumns = normalizeNames(actualTable.primaryKeyColumnNames).toSet()
         if (desiredColumns == actualColumns) {
             return emptyList()
         }

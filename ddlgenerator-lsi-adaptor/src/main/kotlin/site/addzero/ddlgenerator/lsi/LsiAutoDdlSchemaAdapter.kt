@@ -268,12 +268,13 @@ object LsiAutoDdlSchemaAdapter {
             return allFields()
         }
         val rootIdField = joinedRoot.allFields().firstOrNull { field -> field.isIdField() }
-        val inheritedFieldNames = (superClasses + interfaces)
+        val inheritedEntityFieldNames = (superClasses + interfaces)
+            .filter { parent -> parent.isPersistedEntity() }
             .flatMap { parent -> parent.allFields() }
             .mapNotNull { field -> field.name }
             .toSet()
         val declaredBranchFields = fields.filter { field ->
-            field.name !in inheritedFieldNames
+            field.name !in inheritedEntityFieldNames
         }
         return (listOfNotNull(rootIdField) + declaredBranchFields)
             .distinctBy { field -> field.name }
