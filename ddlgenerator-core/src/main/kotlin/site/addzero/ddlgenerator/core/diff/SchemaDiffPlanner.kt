@@ -7,7 +7,6 @@ import site.addzero.ddlgenerator.core.model.AutoDdlForeignKey
 import site.addzero.ddlgenerator.core.model.AutoDdlIndex
 import site.addzero.ddlgenerator.core.model.AutoDdlSchema
 import site.addzero.ddlgenerator.core.options.AutoDdlDiffOptions
-import site.addzero.util.str.matchesWildcard
 
 object SchemaDiffPlanner {
 
@@ -243,7 +242,14 @@ object SchemaDiffPlanner {
     }
 
     private fun List<String>.matches(value: String): Boolean {
-        return any { pattern -> value.matchesWildcard(pattern) }
+        return any { pattern -> matchesWildcard(value, pattern) }
+    }
+
+    private fun matchesWildcard(value: String, pattern: String): Boolean {
+        val regex = pattern
+            .replace(".", "\\.")
+            .replace("*", ".*")
+        return Regex("^$regex$", RegexOption.IGNORE_CASE).matches(value)
     }
 
 
