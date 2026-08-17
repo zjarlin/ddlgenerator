@@ -47,6 +47,7 @@ class FlywayMigrationVersionGenerator(
             .asSequence()
             .filter { migration -> migration.normalizedSql == normalizedSql }
             .filter { migration -> latestAppliedVersion == null || migration.version > latestAppliedVersion }
+            .filter { migration -> migration.source.version.length <= MAX_FLYWAY_VERSION_LENGTH }
             .maxByOrNull(ParsedExistingMigration::version)
         if (reusableMigration != null) {
             return FlywayMigrationVersionResolution(
@@ -56,20 +57,18 @@ class FlywayMigrationVersionGenerator(
         }
 
         val latestKnownVersion = (appliedVersions + existingMigrations.map(ParsedExistingMigration::version)).maxOrNull()
-        val namespaceFingerprint = stableNumericFingerprint(request.namespace)
-        val sqlFingerprint = stableNumericFingerprint(normalizedSql)
-        val clockVersion = clockVersion(
-            namespaceFingerprint = namespaceFingerprint,
-            sqlFingerprint = sqlFingerprint,
-        )
+        val identityFingerprint = stableNumericFingerprint("${request.namespace}\u0000$normalizedSql")
+        val clockVersion = clockVersion(identityFingerprint)
         val resolvedVersion = if (latestKnownVersion == null || clockVersion > latestKnownVersion) {
             clockVersion
         } else {
             versionAfter(
                 latestVersion = latestKnownVersion,
-                namespaceFingerprint = namespaceFingerprint,
-                sqlFingerprint = sqlFingerprint,
+                identityFingerprint = identityFingerprint,
             )
+        }
+        check(resolvedVersion.value.length <= MAX_FLYWAY_VERSION_LENGTH) {
+            "无法在 Flyway 历史表 version VARCHAR($MAX_FLYWAY_VERSION_LENGTH) 限制内生成更高版本: ${resolvedVersion.value}"
         }
         return FlywayMigrationVersionResolution(
             version = resolvedVersion.value,
@@ -77,10 +76,7 @@ class FlywayMigrationVersionGenerator(
         )
     }
 
-    private fun clockVersion(
-        namespaceFingerprint: BigInteger,
-        sqlFingerprint: BigInteger,
-    ): ParsedFlywayVersion {
+    private fun clockVersion(identityFingerprint: BigInteger): ParsedFlywayVersion {
         val now = LocalDateTime.now(clock)
         return ParsedFlywayVersion(
             parts = listOf(
@@ -88,16 +84,14 @@ class FlywayMigrationVersionGenerator(
                 now.format(TIME_FORMATTER).toBigInteger(),
                 now.nano.div(NANOS_PER_MILLISECOND).toBigInteger(),
                 BigInteger.ZERO,
-                namespaceFingerprint,
-                sqlFingerprint,
+                identityFingerprint,
             ),
         )
     }
 
     private fun versionAfter(
         latestVersion: ParsedFlywayVersion,
-        namespaceFingerprint: BigInteger,
-        sqlFingerprint: BigInteger,
+        identityFingerprint: BigInteger,
     ): ParsedFlywayVersion {
         val datePart = latestVersion.parts.getOrElse(0) { BigInteger.ZERO }
         val timePart = latestVersion.parts.getOrElse(1) { BigInteger.ZERO }
@@ -108,8 +102,7 @@ class FlywayMigrationVersionGenerator(
             timePart,
             millisecondPart,
             sequencePart,
-            namespaceFingerprint,
-            sqlFingerprint,
+            identityFingerprint,
         )
         return ParsedFlywayVersion(
             parts = parts,
@@ -124,6 +117,7 @@ class FlywayMigrationVersionGenerator(
 
     private companion object {
         const val NANOS_PER_MILLISECOND = 1_000_000
+        const val MAX_FLYWAY_VERSION_LENGTH = 50
         val DATE_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd")
         val TIME_FORMATTER: DateTimeFormatter = DateTimeFormatter.ofPattern("HHmmss")
     }

@@ -87,7 +87,7 @@ class FlywayMigrationVersionGeneratorTest {
         val resolvedVersion = parseVersion(resolution.version)
         assertTrue(resolvedVersion > parseVersion(latestVersion))
         assertEquals("20260818.120000.999.8", resolvedVersion.parts.take(4).joinToString("."))
-        assertEquals(6, resolvedVersion.parts.size)
+        assertEquals(5, resolvedVersion.parts.size)
     }
 
     @Test
@@ -124,5 +124,48 @@ class FlywayMigrationVersionGeneratorTest {
 
         assertNotEquals(first.version, second.version)
         assertNotEquals(first.version, third.version)
+    }
+
+    @Test
+    fun `generated version fits flyway history varchar 50 column`() {
+        val resolution = generator.generate(
+            FlywayMigrationVersionRequest(
+                appliedVersions = listOf("20260817.160000"),
+                existingMigrations = listOf(
+                    ExistingFlywayMigration(
+                        version = "20260817.170000",
+                        sql = "CREATE INDEX demo_idx ON demo(id);",
+                    )
+                ),
+                namespace = ":apps:tianjin:server",
+                sql = "ALTER TABLE iot_device ADD COLUMN handler_name TEXT;",
+            )
+        )
+
+        assertTrue(resolution.version.length <= 50)
+        assertTrue(parseVersion(resolution.version) > parseVersion("20260817.170000"))
+    }
+
+    @Test
+    fun `overlong pending version is replaced by valid higher version`() {
+        val overlongVersion = "20260818.120000.999.0.1220147163635573897.1398964062078713089"
+        val sql = "ALTER TABLE iot_device ADD COLUMN handler_name TEXT;"
+        val resolution = generator.generate(
+            FlywayMigrationVersionRequest(
+                appliedVersions = listOf("20260817.160000"),
+                existingMigrations = listOf(
+                    ExistingFlywayMigration(
+                        version = overlongVersion,
+                        sql = sql,
+                    )
+                ),
+                namespace = ":lib:biz:iot:model",
+                sql = sql,
+            )
+        )
+
+        assertFalse(resolution.reusedExisting)
+        assertTrue(resolution.version.length <= 50)
+        assertTrue(parseVersion(resolution.version) > parseVersion(overlongVersion))
     }
 }
