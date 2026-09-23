@@ -524,7 +524,7 @@ object LsiAutoDdlSchemaAdapter {
     }
 
     private fun LsiField.shouldSkipField(): Boolean {
-        return isStatic ||
+        return isStatic || isComputed ||
             hasAnnotationSimple("Transient", "Formula", "ManyToManyView", "IdView") ||
             (isCollectionType && !isOwningManyToMany() && !isSerializedScalar())
     }
