@@ -40,6 +40,9 @@ dependencies {
         testImplementation(project(":ddlgenerator-dialect-mysql"))
         testImplementation(project(":ddlgenerator-dialect-h2"))
     }
+    if (project.name == "ddlgenerator-lsi-adaptor") {
+        testImplementation("com.h2database:h2:2.4.240")
+    }
     testImplementation(kotlin("test-junit"))
 }
 tasks.test {

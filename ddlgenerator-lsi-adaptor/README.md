@@ -16,3 +16,5 @@ val schema = LsiAutoDdlSchemaAdapter.from(lsiClasses)
 正向 `@OneToOne` 始终为外键列生成唯一索引（可空时约束非空值），反向 `mappedBy` 不建列。普通 `@ManyToOne` 不隐式唯一；`ForeignKeyType.FAKE` 只关闭外键约束，不改变业务 Key。目标主键不存在、复合列缺失、引用非主键列或重复映射会明确报错。
 
 `AssociationKeyDdlTest` 通过真实 Kotlin/KSP 验证上述关系、重复分组、复合主键，以及 PostgreSQL/MySQL/H2 的创建、修复和幂等输出。旧版错误索引的删除仍受 `allowDestructiveChanges` 控制，升级依赖不会绕过该设置。
+
+H2 回归会实际执行生成的复合主键、外键和唯一约束，并用插入操作验证重复业务 Key 与非法关联目标均被拒绝。复合主键只在表级声明，避免重复定义。

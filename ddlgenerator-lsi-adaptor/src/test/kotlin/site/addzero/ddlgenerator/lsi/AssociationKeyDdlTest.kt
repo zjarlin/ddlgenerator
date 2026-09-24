@@ -10,6 +10,9 @@ import com.tschuchort.compiletesting.SourceFile
 import com.tschuchort.compiletesting.symbolProcessorProviders
 import com.tschuchort.compiletesting.useKsp2
 import java.io.ByteArrayOutputStream
+import java.sql.DriverManager
+import java.sql.SQLException
+import kotlin.test.assertFailsWith
 import java.nio.file.Files
 import org.jetbrains.kotlin.compiler.plugin.ExperimentalCompilerApi
 import site.addzero.ddlgenerator.core.diff.SchemaDiffPlanner
@@ -98,6 +101,31 @@ class AssociationKeyDdlTest {
             assertTrue(repair.contains("DROP"), repair)
             assertTrue(repair.contains("owner_account_id"), repair)
             assertTrue(SchemaDiffPlanner.plan(desired, desired).isEmpty())
+        }
+    }
+
+    @Test
+    fun `H2 executes generated composite foreign keys and rejects duplicate association keys`() {
+        val dialect = H2AutoDdlDialect()
+        val normalized = dialect.normalizeSchema(schema)
+        val statements = dialect.render(SchemaDiffPlanner.plan(normalized, AutoDdlSchema(emptyList())))
+        DriverManager.getConnection("jdbc:h2:mem:association_ddl;DATABASE_TO_LOWER=TRUE").use { connection ->
+            connection.createStatement().use { statement ->
+                statements.forEach { statement.execute(it) }
+                statement.execute("insert into account(account_pk) values (1), (2)")
+                statement.execute("insert into membership(id, owner_account_id, code) values (1, 1, 'A'), (2, 2, 'A')")
+                assertEquals("23505", assertFailsWith<SQLException> {
+                    statement.execute("insert into membership(id, owner_account_id, code) values (3, 1, 'A')")
+                }.sqlState)
+                statement.execute("insert into composite_account(tenant_id, account_number) values (1, 10), (2, 10)")
+                statement.execute("insert into composite_member(id, tenant_fk, number_fk, code) values (1, 1, 10, 'A'), (2, 2, 10, 'A')")
+                assertEquals("23505", assertFailsWith<SQLException> {
+                    statement.execute("insert into composite_member(id, tenant_fk, number_fk, code) values (3, 1, 10, 'A')")
+                }.sqlState)
+                assertEquals("23506", assertFailsWith<SQLException> {
+                    statement.execute("insert into composite_member(id, tenant_fk, number_fk, code) values (4, 1, 99, 'B')")
+                }.sqlState)
+            }
         }
     }
 

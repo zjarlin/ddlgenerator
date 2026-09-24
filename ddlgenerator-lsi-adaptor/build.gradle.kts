@@ -6,6 +6,7 @@ val libs = versionCatalogs.named("libs")
 val ddlGeneratorRootPath = project.path.substringBeforeLast(":")
 
 dependencies {
+    testImplementation("com.h2database:h2:2.4.240")
     api(project("$ddlGeneratorRootPath:ddlgenerator-core"))
     api("site.addzero:lsi-core:2026.09.24")
     testImplementation(kotlin("test-junit"))
