@@ -136,7 +136,11 @@ object SchemaDiffPlanner {
         val operations = mutableListOf<AutoDdlOperation>()
         val actualIndexes = actualTable.indexes
         desiredTable.indexes.forEach { desiredIndex ->
-            if (actualIndexes.none { it.matchesIndex(desiredIndex) }) {
+            if (actualIndexes.any { it.matchesIndex(desiredIndex) }) {
+                return@forEach
+            }
+            val nameInUse = actualIndexes.any { it.name.equals(desiredIndex.name, ignoreCase = true) }
+            if (!nameInUse || options.allowDestructiveChanges) {
                 operations += CreateIndex(desiredTable.name, desiredIndex)
             }
         }
@@ -266,8 +270,7 @@ object SchemaDiffPlanner {
     }
 
     private fun AutoDdlIndex.matchesIndex(other: AutoDdlIndex): Boolean {
-        return name.equals(other.name, ignoreCase = true) ||
-            (type == other.type && normalizeNames(columnNames) == normalizeNames(other.columnNames))
+        return type == other.type && normalizeNames(columnNames) == normalizeNames(other.columnNames)
     }
 
     private fun AutoDdlForeignKey.matchesForeignKey(other: AutoDdlForeignKey): Boolean {

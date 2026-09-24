@@ -102,7 +102,7 @@ object LsiAutoDdlSchemaAdapter {
         val groupedKeys = linkedMapOf<String, MutableList<LsiField>>()
         fieldColumns.keys.filterNot { it.isIdField() }.forEach { field ->
             field.repeatedAnnotations("Key", "Keys").forEach { annotation ->
-                val group = annotation.getAttribute("group")?.toString().orEmpty()
+                val group = annotation.getAttribute("group")?.toString()?.takeIf(String::isNotBlank).orEmpty()
                 groupedKeys.getOrPut(group) { mutableListOf() }.add(field)
             }
         }

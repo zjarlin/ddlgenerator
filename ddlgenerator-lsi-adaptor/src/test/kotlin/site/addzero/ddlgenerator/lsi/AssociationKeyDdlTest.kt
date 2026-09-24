@@ -108,11 +108,23 @@ class AssociationKeyDdlTest {
     fun `H2 executes generated composite foreign keys and rejects duplicate association keys`() {
         val dialect = H2AutoDdlDialect()
         val normalized = dialect.normalizeSchema(schema)
-        val statements = dialect.render(SchemaDiffPlanner.plan(normalized, AutoDdlSchema(emptyList())))
+        val legacy = normalized.copy(tables = normalized.tables.map { table ->
+            if (table.name == "grouped_membership") table.copy(indexes = table.indexes.map { index ->
+                index.copy(columnNames = index.columnNames.filterNot { it == "account_fk" })
+            }) else table
+        })
+        val statements = dialect.render(SchemaDiffPlanner.plan(legacy, AutoDdlSchema(emptyList())))
+        val repair = dialect.render(SchemaDiffPlanner.plan(normalized, legacy, AutoDdlDiffOptions(allowDestructiveChanges = true)))
+        assertTrue(repair.any { it.contains("DROP INDEX") })
         DriverManager.getConnection("jdbc:h2:mem:association_ddl;DATABASE_TO_LOWER=TRUE").use { connection ->
             connection.createStatement().use { statement ->
                 statements.forEach { statement.execute(it) }
+                repair.forEach { statement.execute(it) }
                 statement.execute("insert into account(account_pk) values (1), (2)")
+                statement.execute("insert into grouped_membership(id, account_fk, code, alias) values (1, 1, 'A', 'X'), (2, 2, 'A', 'X')")
+                assertEquals("23505", assertFailsWith<SQLException> {
+                    statement.execute("insert into grouped_membership(id, account_fk, code, alias) values (3, 1, 'A', 'Y')")
+                }.sqlState)
                 statement.execute("insert into membership(id, owner_account_id, code) values (1, 1, 'A'), (2, 2, 'A')")
                 assertEquals("23505", assertFailsWith<SQLException> {
                     statement.execute("insert into membership(id, owner_account_id, code) values (3, 1, 'A')")
