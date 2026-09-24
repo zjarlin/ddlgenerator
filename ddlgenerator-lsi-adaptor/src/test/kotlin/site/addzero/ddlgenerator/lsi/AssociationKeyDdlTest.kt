@@ -159,8 +159,8 @@ class AssociationKeyDdlTest {
                 """
                 @Entity @Table(name = "keyed_profile") interface KeyedProfile {
                     @Id val id: Long
-                    @Key @OneToOne @JoinColumn(name = "account_fk") val account: Account
-                    @Key val code: String
+                    @Key(group = "account_fk") @OneToOne @JoinColumn(name = "account_fk") val account: Account
+                    @Key(group = "account_fk") val code: String
                 }
                 """,
                 """
@@ -179,7 +179,7 @@ class AssociationKeyDdlTest {
                     @Id val id: Long
                     @Key @ManyToOne
                     @JoinColumn(name = "number_fk", referencedColumnName = "account_number")
-                    @JoinColumn(name = "tenant_fk", referencedColumnName = "tenant_id")
+                    @JoinColumn(name = "tenant_fk", referencedColumnName = "tenant_id", foreignKeyType = ForeignKeyType.REAL)
                     val account: CompositeAccount
                     @Key val code: String
                 }

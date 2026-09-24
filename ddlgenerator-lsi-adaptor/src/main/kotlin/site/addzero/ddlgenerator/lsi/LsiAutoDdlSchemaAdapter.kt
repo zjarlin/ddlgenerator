@@ -128,8 +128,11 @@ object LsiAutoDdlSchemaAdapter {
                 if (any { it.columnNames == names }) {
                     return@forEach
                 }
+                val baseName = "uk_${clazz.guessTableName}_${names.joinToString("_")}"
+                val indexName = generateSequence(baseName) { "${it}_unique" }
+                    .first { candidate -> none { it.name.equals(candidate, ignoreCase = true) } }
                 add(AutoDdlIndex(
-                    name = "uk_${clazz.guessTableName}_${names.joinToString("_")}",
+                    name = indexName,
                     columnNames = names,
                     type = AutoDdlIndexType.UNIQUE,
                 ))
@@ -621,10 +624,10 @@ object LsiAutoDdlSchemaAdapter {
 
     private fun LsiField.isFakeForeignKey(): Boolean {
         val types = repeatedAnnotations("JoinColumn", "JoinColumns")
-            .map { it.getAttribute("foreignKeyType").enumConstantName() ?: "AUTO" }
+            .map { it.getAttribute("foreignKeyType").enumConstantName() == "FAKE" }
             .distinct()
         require(types.size <= 1) { "Association $name contains conflicting foreign key types" }
-        return types.singleOrNull() == "FAKE"
+        return types.singleOrNull() == true
     }
 
     private fun LsiField.isOwningManyToMany(): Boolean {
