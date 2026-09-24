@@ -10,3 +10,9 @@
 ```kotlin
 val schema = LsiAutoDdlSchemaAdapter.from(lsiClasses)
 ```
+
+关联约束直接使用已解析的物理列：默认外键遵循下划线命名，`@JoinColumn`/`@JoinColumns` 使用指定列名，复合外键按目标主键列排序。重复 `@Key(group = ...)` 和 `@Keys` 的每个分组均保留完整关联列，不会退化成仅含标量的唯一索引。含可空物理列的 Key 组继续整体跳过；`inputNotNull = true` 的关联列为非空。
+
+正向 `@OneToOne` 始终为外键列生成唯一索引（可空时约束非空值），反向 `mappedBy` 不建列。普通 `@ManyToOne` 不隐式唯一；`ForeignKeyType.FAKE` 只关闭外键约束，不改变业务 Key。目标主键不存在、复合列缺失、引用非主键列或重复映射会明确报错。
+
+`AssociationKeyDdlTest` 通过真实 Kotlin/KSP 验证上述关系、重复分组、复合主键，以及 PostgreSQL/MySQL/H2 的创建、修复和幂等输出。旧版错误索引的删除仍受 `allowDestructiveChanges` 控制，升级依赖不会绕过该设置。

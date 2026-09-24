@@ -7,9 +7,9 @@ val ddlGeneratorRootPath = project.path.substringBeforeLast(":")
 
 dependencies {
     api(project("$ddlGeneratorRootPath:ddlgenerator-core"))
-    api("site.addzero:lsi-core:2026.09.23")
+    api("site.addzero:lsi-core:2026.09.24")
     testImplementation(kotlin("test-junit"))
-    testImplementation("site.addzero:lsi-ksp:2026.09.23")
+    testImplementation("site.addzero:lsi-ksp:2026.09.24")
     testImplementation("com.google.devtools.ksp:symbol-processing-api:2.3.9")
     testImplementation("org.babyfish.jimmer:jimmer-core:0.11.2")
     testImplementation("dev.zacsweers.kctfork:ksp:0.7.1") {
@@ -24,5 +24,5 @@ description = "AutoDDL 的 LSI 输入适配层"
 
 tasks.test {
     useJUnit()
-    maxHeapSize = "2g"
+    maxHeapSize = "4g"
 }

@@ -37,48 +37,41 @@ object LsiAutoDdlSchemaAdapter {
             ?.takeUnless { root -> root.isSameType(owner) }
         val rootIdField = joinedRoot?.allFields()?.firstOrNull { field -> field.isIdField() }
         val tableFields = tableFieldsForPhysicalTable()
-        val scalarColumns = mutableListOf<AutoDdlColumn>()
+        val fieldColumns = linkedMapOf<LsiField, List<AutoDdlColumn>>()
         val foreignKeys = mutableListOf<AutoDdlForeignKey>()
 
         tableFields.forEach { field ->
-            when {
-                field.shouldSkipField() -> Unit
-                field.isEmbeddableField() -> {
-                    scalarColumns += field.toEmbeddedColumns()
-                }
+            val columns = when {
+                field.shouldSkipField() -> emptyList()
+                field.isEmbeddableField() -> field.toEmbeddedColumns()
                 field.isOwningAssociation() -> {
-                    val referencedClass = field.resolveAssociationTargetClass(owner, allEntities) ?: return@forEach
-                    val referencedId = referencedClass.allFields().firstOrNull { it.isIdField() }
-                    val columnName = field.joinColumnName()?.takeIf(String::isNotBlank) ?: "${field.name.orEmpty()}_id"
-                    val referenceColumnName = field.referencedColumnName()?.takeIf(String::isNotBlank)
-                        ?: referencedId?.columnName?.takeIf(String::isNotBlank)
-                        ?: referencedId?.name?.takeIf(String::isNotBlank)
-                        ?: "id"
-                    val column = AutoDdlColumn(
-                        name = columnName,
-                        logicalType = referencedId?.toLogicalType() ?: AutoDdlLogicalType.INT64,
-                        nullable = field.isNullable,
-                        comment = field.comment,
-                    )
-                    scalarColumns += column
+                    val referencedClass = requireNotNull(field.resolveAssociationTargetClass(owner, allEntities)) {
+                        "Cannot resolve association target for ${owner.qualifiedName}.${field.name}"
+                    }
+                    val references = field.associationColumns(referencedClass)
+                    val columnNames = references.map { it.first.name }
                     if (!field.isFakeForeignKey()) {
                         foreignKeys += AutoDdlForeignKey(
-                            name = "fk_${guessTableName}_$columnName",
-                            columnNames = listOf(columnName),
+                            name = "fk_${guessTableName}_${columnNames.joinToString("_")}",
+                            columnNames = columnNames,
                             referencedTableName = referencedClass.guessTableName,
-                            referencedColumnNames = listOf(referenceColumnName),
+                            referencedColumnNames = references.map { it.second.name },
                         )
                     }
+                    references.map { it.first }
                 }
-                field.isOwningManyToMany() -> Unit
+                field.isOwningManyToMany() -> emptyList()
                 else -> {
                     val column = field.toColumn()
-                    scalarColumns += if (joinedRoot != null && field.isSameField(rootIdField)) {
+                    listOf(if (joinedRoot != null && field.isSameField(rootIdField)) {
                         column.copy(autoIncrement = false, sequenceName = null)
                     } else {
                         column
-                    }
+                    })
                 }
+            }
+            if (columns.isNotEmpty()) {
+                fieldColumns[field] = columns
             }
         }
         if (joinedRoot != null && rootIdField != null) {
@@ -91,11 +84,11 @@ object LsiAutoDdlSchemaAdapter {
             )
         }
 
-        val indexes = buildIndexes(this, scalarColumns, tableFields)
+        val indexes = buildIndexes(this, fieldColumns)
         return AutoDdlTable(
             name = guessTableName,
             comment = comment,
-            columns = scalarColumns.distinctBy { it.name.lowercase() },
+            columns = fieldColumns.values.flatten().distinctBy { it.name.lowercase() },
             indexes = indexes,
             foreignKeys = foreignKeys,
         )
@@ -103,52 +96,106 @@ object LsiAutoDdlSchemaAdapter {
 
     private fun buildIndexes(
         clazz: LsiClass,
-        columns: List<AutoDdlColumn>,
-        tableFields: List<LsiField> = clazz.allFields(),
+        fieldColumns: Map<LsiField, List<AutoDdlColumn>>,
     ): List<AutoDdlIndex> {
-        val fields = tableFields
-            .filter { field -> columns.any { it.name.equals(field.columnName ?: field.name, ignoreCase = true) } }
-
-        val groupedKeys = fields
-            .filter { it.hasAnnotationSimple("Key") && !it.isIdField() }
-            .groupBy { it.annotationValue("Key", "group")?.takeIf(String::isNotBlank) ?: "" }
-
+        // 约束直接复用建列结果，避免关联或嵌入属性被属性名过滤后丢失部分 Key。
+        val groupedKeys = linkedMapOf<String, MutableList<LsiField>>()
+        fieldColumns.keys.filterNot { it.isIdField() }.forEach { field ->
+            field.repeatedAnnotations("Key", "Keys").forEach { annotation ->
+                val group = annotation.getAttribute("group")?.toString().orEmpty()
+                groupedKeys.getOrPut(group) { mutableListOf() }.add(field)
+            }
+        }
         return buildList {
             groupedKeys.forEach { (groupName, groupedFields) ->
-                if (groupedFields.any { field -> field.isNullable }) {
+                val columns = groupedFields.distinct().flatMap { fieldColumns.getValue(it) }
+                if (columns.any { it.nullable }) {
                     return@forEach
                 }
-                val columnNames = groupedFields.mapNotNull { it.columnName ?: it.name }
-                if (columnNames.isEmpty()) {
-                    return@forEach
-                }
-                val normalizedTableName = clazz.guessTableName
-                val indexName = if (groupName.isBlank()) {
-                    "uk_${normalizedTableName}_${columnNames.joinToString("_")}"
-                } else {
-                    "uk_${normalizedTableName}_$groupName"
-                }
-                add(
-                    AutoDdlIndex(
-                        name = indexName,
-                        columnNames = columnNames,
-                        type = AutoDdlIndexType.UNIQUE,
-                    )
-                )
+                val names = columns.map { it.name }.distinct()
+                add(AutoDdlIndex(
+                    name = "uk_${clazz.guessTableName}_${groupName.ifBlank { names.joinToString("_") }}",
+                    columnNames = names,
+                    type = AutoDdlIndexType.UNIQUE,
+                ))
             }
-
-            fields.filter { it.isUniqueField() && !it.hasAnnotationSimple("Key") }
-                .forEach { field ->
-                    val columnName = field.columnName ?: field.name ?: return@forEach
-                    add(
-                        AutoDdlIndex(
-                            name = "uk_${clazz.guessTableName}_$columnName",
-                            columnNames = listOf(columnName),
-                            type = AutoDdlIndexType.UNIQUE,
-                        )
-                    )
+            fieldColumns.forEach { (field, columns) ->
+                if (!field.isUniqueField() && !field.hasAnnotationSimple("OneToOne")) {
+                    return@forEach
                 }
+                val names = columns.map { it.name }
+                // OneToOne 自身的唯一性独立于业务 Key，可空外键同样需要约束非空值。
+                if (any { it.columnNames == names }) {
+                    return@forEach
+                }
+                add(AutoDdlIndex(
+                    name = "uk_${clazz.guessTableName}_${names.joinToString("_")}",
+                    columnNames = names,
+                    type = AutoDdlIndexType.UNIQUE,
+                ))
+            }
         }.distinctBy { it.name.lowercase() }
+    }
+
+    private fun LsiField.associationColumns(target: LsiClass): List<Pair<AutoDdlColumn, AutoDdlColumn>> {
+        val id = requireNotNull(target.allFields().firstOrNull { it.isIdField() }) {
+            "Association $name targets ${target.qualifiedName} without an id"
+        }
+        val targetColumns = if (id.isEmbeddableField()) id.toEmbeddedColumns() else listOf(id.toColumn())
+        val joins = repeatedAnnotations("JoinColumn", "JoinColumns")
+        require(joins.size == targetColumns.size || (joins.isEmpty() && targetColumns.size == 1)) {
+            "Association $name must map all ${targetColumns.size} target id columns"
+        }
+        val references = joins.map { it.getAttribute("referencedColumnName")?.toString().orEmpty() }
+        require(references.filter(String::isNotBlank).distinctBy { it.lowercase() }.size == references.count(String::isNotBlank)) {
+            "Association $name contains duplicate referenced columns"
+        }
+        val columns = targetColumns.map { targetColumn ->
+            val join = if (targetColumns.size == 1) joins.singleOrNull() else joins.singleOrNull {
+                it.getAttribute("referencedColumnName")?.toString().equals(targetColumn.name, ignoreCase = true)
+            }
+            require(targetColumns.size == 1 || join != null) {
+                "Association $name does not reference target id column ${targetColumn.name}"
+            }
+            val reference = join?.getAttribute("referencedColumnName")?.toString().orEmpty()
+            require(reference.isBlank() || reference.equals(targetColumn.name, ignoreCase = true)) {
+                "Association $name references non-id column $reference"
+            }
+            val columnName = join?.getAttribute("name")?.toString()?.takeIf(String::isNotBlank)
+                ?: "${name.orEmpty().toJimmerSnakeCase()}_id"
+            require(targetColumns.size == 1 || !join?.getAttribute("name")?.toString().isNullOrBlank()) {
+                "Association $name requires explicit names for composite join columns"
+            }
+            val column = targetColumn.copy(
+                name = columnName,
+                nullable = isNullable && annotationValue("ManyToOne", "inputNotNull") != "true" &&
+                    annotationValue("OneToOne", "inputNotNull") != "true",
+                primaryKey = false,
+                autoIncrement = false,
+                sequenceName = null,
+                defaultValue = null,
+                comment = comment,
+            )
+            column to targetColumn
+        }
+        require(columns.distinctBy { it.first.name.lowercase() }.size == columns.size) {
+            "Association $name contains duplicate join columns"
+        }
+        return columns
+    }
+
+    private fun LsiField.repeatedAnnotations(simpleName: String, containerName: String): List<LsiAnnotation> {
+        return annotations.flatMap { annotation ->
+            when (annotation.simpleName) {
+                simpleName -> listOf(annotation)
+                containerName -> when (val value = annotation.getAttribute("value")) {
+                    is Collection<*> -> value.filterIsInstance<LsiAnnotation>()
+                    is Array<*> -> value.filterIsInstance<LsiAnnotation>()
+                    else -> emptyList()
+                }
+                else -> emptyList()
+            }
+        }
     }
 
     fun scanManyToManyTables(classes: List<LsiClass>): List<AutoDdlTable> {
@@ -372,7 +419,9 @@ object LsiAutoDdlSchemaAdapter {
             propertyPath = "",
             columnOverrides = propOverrides(),
             visitingTypes = linkedSetOf(),
-        )
+        ).map { column ->
+            if (isIdField()) column.copy(primaryKey = true) else column
+        }
     }
 
     private fun LsiClass.toEmbeddedColumns(
@@ -526,6 +575,7 @@ object LsiAutoDdlSchemaAdapter {
     private fun LsiField.shouldSkipField(): Boolean {
         return isStatic || isComputed ||
             hasAnnotationSimple("Transient", "Formula", "ManyToManyView", "IdView") ||
+            !annotationValue("OneToOne", "mappedBy").isNullOrBlank() ||
             (isCollectionType && !isOwningManyToMany() && !isSerializedScalar())
     }
 
@@ -570,8 +620,11 @@ object LsiAutoDdlSchemaAdapter {
     }
 
     private fun LsiField.isFakeForeignKey(): Boolean {
-        val foreignKeyType = annotationValue("JoinColumn", "foreignKeyType") ?: return false
-        return foreignKeyType.endsWith("FAKE", ignoreCase = true)
+        val types = repeatedAnnotations("JoinColumn", "JoinColumns")
+            .map { it.getAttribute("foreignKeyType").enumConstantName() ?: "AUTO" }
+            .distinct()
+        require(types.size <= 1) { "Association $name contains conflicting foreign key types" }
+        return types.singleOrNull() == "FAKE"
     }
 
     private fun LsiField.isOwningManyToMany(): Boolean {
@@ -679,14 +732,6 @@ object LsiAutoDdlSchemaAdapter {
     private fun LsiField.isUniqueField(): Boolean {
         return hasAnnotationSimple("Unique") ||
             annotation("Column")?.getAttribute("unique")?.toString()?.toBooleanStrictOrNull() == true
-    }
-
-    private fun LsiField.joinColumnName(): String? {
-        return annotationValue("JoinColumn", "name")
-    }
-
-    private fun LsiField.referencedColumnName(): String? {
-        return annotationValue("JoinColumn", "referencedColumnName")
     }
 
     private fun LsiField.hasAnnotationSimple(vararg simpleNames: String): Boolean {

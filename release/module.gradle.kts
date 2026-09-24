@@ -44,7 +44,7 @@ dependencies {
 }
 tasks.test {
     useJUnit()
-    maxHeapSize = "2g"
+    maxHeapSize = "4g"
 }
 mavenPublishing {
     configure(KotlinJvm(javadocJar = JavadocJar.Empty(), sourcesJar = true))
