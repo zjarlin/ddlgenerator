@@ -128,7 +128,11 @@ abstract class AbstractSqlDialect(
     protected open fun renderCreateTable(table: AutoDdlTable): String {
         val primaryKeyColumns = table.columns.filter { it.primaryKey }
         val body = buildList {
-            addAll(table.columns.map { renderColumnDefinition(it) })
+            // 复合主键只在表级声明，避免支持列级主键的方言重复定义主键。
+            addAll(table.columns.map { column ->
+                val renderedColumn = if (primaryKeyColumns.size > 1) column.copy(primaryKey = false) else column
+                renderColumnDefinition(renderedColumn)
+            })
             if (
                 primaryKeyColumns.size > 1 ||
                 (primaryKeyColumns.size == 1 && !supportsInlinePrimaryKey(primaryKeyColumns.single()))
