@@ -135,14 +135,30 @@ object SchemaDiffPlanner {
     ): List<AutoDdlOperation> {
         val operations = mutableListOf<AutoDdlOperation>()
         val actualIndexes = actualTable.indexes
+        val desiredIndexesByName = desiredTable.indexes.associateBy { it.name.lowercase() }
+        // 等价索引的物理名称不能占用另一个期望索引所需的名称。
+        val retainableIndexes = actualIndexes.filter { actualIndex ->
+            val desiredAtPhysicalName = desiredIndexesByName[actualIndex.name.lowercase()]
+            !options.allowDestructiveChanges || desiredAtPhysicalName == null ||
+                actualIndex.matchesIndex(desiredAtPhysicalName)
+        }
+        val retainedNames = mutableSetOf<String>()
         desiredTable.indexes.forEach { desiredIndex ->
-            if (actualIndexes.none { it.matchesIndex(desiredIndex) }) {
+            val equivalentIndex = retainableIndexes.firstOrNull { actualIndex ->
+                actualIndex.name.equals(desiredIndex.name, ignoreCase = true) && actualIndex.matchesIndex(desiredIndex)
+            } ?: retainableIndexes.firstOrNull { it.matchesIndex(desiredIndex) }
+            if (equivalentIndex != null) {
+                retainedNames += equivalentIndex.name.lowercase()
+                return@forEach
+            }
+            val nameInUse = actualIndexes.any { it.name.equals(desiredIndex.name, ignoreCase = true) }
+            if (!nameInUse || options.allowDestructiveChanges) {
                 operations += CreateIndex(desiredTable.name, desiredIndex)
             }
         }
         if (options.allowDestructiveChanges) {
             actualIndexes
-                .filter { actualIndex -> desiredTable.indexes.none { it.matchesIndex(actualIndex) } }
+                .filter { it.name.lowercase() !in retainedNames }
                 .forEach { operations += DropIndex(desiredTable.name, it.name) }
         }
         return operations
@@ -266,8 +282,7 @@ object SchemaDiffPlanner {
     }
 
     private fun AutoDdlIndex.matchesIndex(other: AutoDdlIndex): Boolean {
-        return name.equals(other.name, ignoreCase = true) ||
-            (type == other.type && normalizeNames(columnNames) == normalizeNames(other.columnNames))
+        return type == other.type && normalizeNames(columnNames) == normalizeNames(other.columnNames)
     }
 
     private fun AutoDdlForeignKey.matchesForeignKey(other: AutoDdlForeignKey): Boolean {
